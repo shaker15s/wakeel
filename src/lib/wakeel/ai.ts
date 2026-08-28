@@ -132,3 +132,47 @@ export async function chatText(systemPrompt: string, messages: ChatTurn[]): Prom
     return ''
   }
 }
+
+/**
+ * Streaming conversational completion for the agent chat.
+ * Asks the SDK for `stream: true` — the SDK hands back the upstream SSE
+ * ReadableStream (OpenAI-style `data: {choices:[{delta:{content}}]}` lines).
+ * Returns that raw stream for the caller to parse, or null on failure
+ * (callers should fall back to chatText).
+ */
+export async function chatTextStream(
+  systemPrompt: string,
+  messages: ChatTurn[]
+): Promise<ReadableStream<Uint8Array> | null> {
+  try {
+    const zai = await getZAI()
+    const response: unknown = await zai.chat.completions.create({
+      messages: [
+        { role: 'assistant', content: systemPrompt },
+        ...messages,
+      ],
+      stream: true,
+      thinking: { type: 'disabled' },
+    })
+    if (response instanceof ReadableStream) return response
+    // defensive: some SDK builds may return a Response-like wrapper
+    const maybeBody = (response as { body?: ReadableStream<Uint8Array> } | null)?.body
+    return maybeBody instanceof ReadableStream ? maybeBody : null
+  } catch (error) {
+    console.error('[wakeel/ai] chatTextStream failed:', error)
+    return null
+  }
+}
+
+/** Extract one delta token out of an upstream SSE data payload. */
+export function extractStreamDelta(dataPayload: string): string {
+  try {
+    const parsed = JSON.parse(dataPayload) as {
+      choices?: Array<{ delta?: { content?: string | null } | null }>
+    }
+    const delta = parsed?.choices?.[0]?.delta?.content
+    return typeof delta === 'string' ? delta : ''
+  } catch {
+    return ''
+  }
+}
