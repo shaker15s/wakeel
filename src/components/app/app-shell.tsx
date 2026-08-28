@@ -8,6 +8,7 @@ import { AppShellSkeleton } from "@/components/app/app-shell-skeleton";
 import { Landing } from "@/components/app/landing/landing";
 import { Console } from "@/components/app/console/console";
 import { OnboardingDialog } from "@/components/app/onboarding-dialog";
+import { SharedSystemView } from "@/components/app/shared-system-view";
 import { useWakeel } from "@/lib/store";
 
 /**
@@ -31,11 +32,24 @@ export function AppShell() {
   const view = useWakeel((s) => s.view);
   const hydrated = useWakeel((s) => s.hydrated);
   const lang = useWakeel((s) => s.lang);
+  const shareToken = useWakeel((s) => s.shareToken);
   const hydrate = useWakeel((s) => s.hydrate);
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  // react to hash changes while running (e.g. paste a share link in-session)
+  useEffect(() => {
+    const onHash = () => {
+      const m = /^#share=([A-Za-z0-9_-]+)$/.exec(window.location.hash);
+      if (m) {
+        useWakeel.setState({ shareToken: m[1], view: "share" });
+      }
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   // mirror the language onto <html> so the whole document flips (RTL/LTR)
   useEffect(() => {
@@ -57,6 +71,16 @@ export function AppShell() {
             transition={{ duration: 0.25 }}
           >
             <AppShellSkeleton />
+          </motion.div>
+        ) : view === "share" && shareToken ? (
+          <motion.div
+            key="share"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+          >
+            <SharedSystemView token={shareToken} />
           </motion.div>
         ) : view === "console" ? (
           <motion.div

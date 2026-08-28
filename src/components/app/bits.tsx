@@ -116,6 +116,7 @@ const TYPE_COLORS: Record<string, string> = {
   ARCHIVE: "text-muted-foreground border-muted-foreground/30 bg-muted-foreground/5",
   RESTORE: "text-live border-live/40 bg-live/10",
   AUTOMATION: "text-gold border-gold/30 bg-gold/5",
+  SHARE: "text-gold-pale border-gold-pale/40 bg-gold-pale/10",
 };
 
 export function TypeChip({

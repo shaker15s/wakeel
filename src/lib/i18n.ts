@@ -373,6 +373,10 @@ export const en = {
     selectOne: (v: string) => `Select record ${v}`,
     recActions: "Record actions",
     edit: "Edit",
+    kbdNav: "navigate",
+    kbdSelect: "select",
+    kbdEdit: "edit",
+    kbdClear: "dismiss",
     delBulkTitle: (n: number) => `Delete ${n} record${n === 1 ? "" : "s"}?`,
     delBulkDesc: (name: string) =>
       `The selected records will be permanently removed from ${name}. This action cannot be undone.`,
@@ -447,6 +451,10 @@ export const en = {
     sugg1: "What systems do I have?",
     sugg2: "Suggest an automation for my CRM",
     sugg3: (name: string) => `How many records are in ${name}?`,
+    insightEmpty: (name: string) => `“${name}” is live but empty — want me to seed realistic sample data?`,
+    insightStale: (name: string) => `It’s been quiet around ${name} — want a status digest?`,
+    insightRich: (name: string) => `Give me a pulse on ${name} — totals, recent writes, anything odd.`,
+    insightCold: "No systems yet — give me your company URL and I’ll map your stack.",
     placeholder: "Message Wakeel…",
     composerLabel: "Message Wakeel",
     send: "Send message",
@@ -455,6 +463,54 @@ export const en = {
     sending: "OPERATOR · SENDING…",
     toastErr: "Wakeel is unreachable",
     logLabel: "Agent conversation",
+  },
+
+  share: {
+    // owner-side panel
+    button: "SHARE",
+    panelTitle: "SHARE THIS SYSTEM",
+    panelDesc:
+      "Issue a secret read-only link. Anyone who has it can inspect this system — schema, live records, pulse — without signing in.",
+    issue: "ISSUE READ-ONLY LINK",
+    issuing: "ISSUING…",
+    linkLabel: "READ-ONLY LINK",
+    copy: "COPY",
+    copied: "COPIED",
+    revoke: "REVOKE",
+    revoking: "REVOKING…",
+    revokedNote: "Link revoked — that URL is now dead.",
+    views: (n: number) => `${n} ${n === 1 ? "VIEW" : "VIEWS"}`,
+    issuedLabel: "ISSUED",
+    toastOk: "Read-only link issued",
+    toastOkDesc: "Anyone with the link can now view this system.",
+    toastRevokeOk: "Share link revoked",
+    toastRevokeOkDesc: "The URL stops working immediately.",
+    toastErr: "Share action failed",
+    footerNote: "You can revoke the link at any time — access dies instantly.",
+    // public-side view
+    pubEyebrow: "SHARED SYSTEM · READ-ONLY SNAPSHOT",
+    pubBy: (w: string) => `SHARED BY THE ${w} WORKSPACE`,
+    pubSchema: "SCHEMA",
+    pubRecords: "LIVE RECORDS",
+    pubWritten: "WRITTEN",
+    pubAutomations: "AUTOMATIONS",
+    pubPulse: "PULSE · LAST 14 DAYS",
+    statFields: "TYPED FIELDS",
+    statRecords: "RECORDS",
+    statAutomations: "AUTOMATIONS",
+    statSince: "ONLINE SINCE",
+    loading: "FETCHING SNAPSHOT…",
+    notFoundTitle: "LINK UNAVAILABLE",
+    notFoundCopy:
+      "This share link was revoked or never existed. Ask the operator for a fresh one — or hire your own Wakeel and share systems of your own.",
+    notFoundArt: `[ ! ]  404
+ ┌─────────────┐
+ │  ██  LINK  ██  │
+ │  DEAD END    │
+ └─────────────┘`,
+    pubCta: "HIRE YOUR OWN WAKEEL",
+    pubFooter: "Assembled, run and shared by Wakeel — the AI employee that never clocks out.",
+    backToSite: "wakeel.app",
   },
 
   palette: {
@@ -670,7 +726,9 @@ export const ar: Dict = {
     operatorFallback: "مشغّل",
     subEmpty: "واكيل في الخدمة. ابدأ بمسح استكشاف أو ابنِ أول نظام لك.",
     subWith: (systems: number, records: number, ws: string) =>
-      `واكيل يراقب ${systems} ${systems === 1 ? "نظاماً" : "أنظمة"} و${records} ${records === 1 ? "سجلاً" : "سجلات"} في ${ws}.`,
+      // \u200F (RLM) keeps a trailing period on the RTL side when the
+      // workspace name is Latin — otherwise it latches onto the Latin run.
+      `واكيل يراقب ${systems} ${systems === 1 ? "نظاماً" : "أنظمة"} و${records} ${records === 1 ? "سجلاً" : "سجلات"} في ${ws}\u200F.`,
     wsFallback: "مساحة عملك",
     statSystems: "الأنظمة",
     statRecords: "السجلات",
@@ -717,9 +775,9 @@ export const ar: Dict = {
     clear: "مسح",
     historyLabel: "سجل المسوحات",
     resultsLabel: "أحدث نتائج المسح",
-    fallbackSummary: (n: number, target: string) => `رُصد ${n} نظام لـ ${target}.`,
+    fallbackSummary: (n: number, target: string) => `رُصد ${n} نظام لـ ${target}\u200F.`,
     toastOk: "اكتمل المسح",
-    toastOkDesc: (n: number, target: string) => `رُصد ${n} نظام لـ ${target}.`,
+    toastOkDesc: (n: number, target: string) => `رُصد ${n} نظام لـ ${target}\u200F.`,
     toastErr: "فشل المسح",
   },
 
@@ -842,9 +900,13 @@ export const ar: Dict = {
     selectOne: (v: string) => `تحديد السجل ${v}`,
     recActions: "إجراءات السجل",
     edit: "تحرير",
+    kbdNav: "تنقّل",
+    kbdSelect: "تحديد",
+    kbdEdit: "تحرير",
+    kbdClear: "إلغاء",
     delBulkTitle: (n: number) => `تحذف ${n} ${n === 1 ? "سجلاً" : "سجلات"}؟`,
     delBulkDesc: (name: string) =>
-      `ستُحذف السجلات المحددة نهائياً من ${name}. لا يمكن التراجع عن هذا الإجراء.`,
+      `ستُحذف السجلات المحددة نهائياً من ${name}\u200F. لا يمكن التراجع عن هذا الإجراء.`,
     toastAddOk: "أُضيف السجل",
     toastAddDesc: "سُجل في الدفتر وحُفظ في نظامك.",
     toastAddErr: "تعذرت إضافة السجل",
@@ -916,6 +978,10 @@ export const ar: Dict = {
     sugg1: "ما الأنظمة التي أملكها؟",
     sugg2: "اقترح أتمتة لنظام العملاء عندي",
     sugg3: (name: string) => `كم سجلاً في ${name}؟`,
+    insightEmpty: (name: string) => `«${name}» حيّ لكنه فارغ — أجهّز لك بيانات تجريبية واقعية؟`,
+    insightStale: (name: string) => `لا نشاط حول ${name} مؤخراً — أعدّ لك ملخصاً للحالة؟`,
+    insightRich: (name: string) => `أعطني نبضة عن ${name} — الإجماليات وآخر الكتابات وأي شيء غريب.`,
+    insightCold: "لا أنظمة بعد — أعطني رابط شركتك وسأرصد منظومتك.",
     placeholder: "راسل واكيل…",
     composerLabel: "راسل واكيل",
     send: "إرسال الرسالة",
@@ -924,6 +990,54 @@ export const ar: Dict = {
     sending: "المشغّل · يُرسل…",
     toastErr: "واكيل خارج التغطية",
     logLabel: "محادثة الوكيل",
+  },
+
+  share: {
+    // owner-side panel
+    button: "مشاركة",
+    panelTitle: "شارك هذا النظام",
+    panelDesc:
+      "أصدر رابط قراءة فقط سرياً. أي شخص يملكه يستطيع معاينة هذا النظام — البنية والسجلات الحية والنبض — دون تسجيل دخول.",
+    issue: "إصدار رابط قراءة فقط",
+    issuing: "جارٍ الإصدار…",
+    linkLabel: "رابط القراءة فقط",
+    copy: "نسخ",
+    copied: "تم النسخ",
+    revoke: "إبطال",
+    revoking: "جارٍ الإبطال…",
+    revokedNote: "أُبطل الرابط — عنوان URL لم يعد يعمل.",
+    views: (n: number) => `${n} ${n === 1 ? "مشاهدة" : "مشاهدات"}`,
+    issuedLabel: "صدر",
+    toastOk: "تم إصدار رابط القراءة فقط",
+    toastOkDesc: "أي شخص يملك الرابط يستطيع الآن معاينة النظام.",
+    toastRevokeOk: "أُبطل رابط المشاركة",
+    toastRevokeOkDesc: "توقف الرابط عن العمل فوراً.",
+    toastErr: "فشلت عملية المشاركة",
+    footerNote: "يمكنك إبطال الرابط في أي وقت — ينقطع الوصول فوراً.",
+    // public-side view
+    pubEyebrow: "نظام مُشارك · لقطة قراءة فقط",
+    pubBy: (w: string) => `مُشارَك من مساحة عمل ${w}`,
+    pubSchema: "البنية",
+    pubRecords: "السجلات الحية",
+    pubWritten: "كُتب",
+    pubAutomations: "الأتمتات",
+    pubPulse: "النبض · آخر 14 يوماً",
+    statFields: "حقول مُنمّطة",
+    statRecords: "سجلات",
+    statAutomations: "أتمتات",
+    statSince: " يعمل منذ",
+    loading: "جارٍ جلب اللقطة…",
+    notFoundTitle: "الرابط غير متاح",
+    notFoundCopy:
+      "هذا الرابط أُبطل أو لم يكن موجوداً أصلاً. اطلب من المشغّل رابطاً جديداً — أو وظّف وكيلاً خاصاً بك وشارك أنظمتك بنفسك.",
+    notFoundArt: `[ ! ]  404
+ ┌─────────────┐
+ │  ██  LINK  ██  │
+ │  DEAD END    │
+ └─────────────┘`,
+    pubCta: "وظّف وكيلاً خاصاً بك",
+    pubFooter: "يبنيه ويشغّله ويشاركه واكيل — الموظف الذكي الذي لا ينتهي دوامه.",
+    backToSite: "wakeel.app",
   },
 
   palette: {
@@ -952,6 +1066,20 @@ export const ar: Dict = {
 };
 
 const DICTS: Record<Lang, Dict> = { en, ar };
+
+/**
+ * Record-count label with correct pluralization.
+ *  EN: 0 RECORDS / 1 RECORD / 5 RECORDS
+ *  AR: 0 سجلات · 1 سجل · 2 سجلان · 3–10 سجلات · 11+ سجلاً
+ */
+export function recCount(n: number, lang: Lang): string {
+  if (lang === "en") return `${n} RECORD${n === 1 ? "" : "S"}`;
+  if (n === 0) return `${n} سجلات`;
+  if (n === 1) return `${n} سجل`;
+  if (n === 2) return `${n} سجلان`;
+  if (n <= 10) return `${n} سجلات`;
+  return `${n} سجلاً`;
+}
 
 /** Typed hook: returns the dictionary for the active language. */
 export function useT(): Dict {

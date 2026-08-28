@@ -161,7 +161,7 @@ export function CommandPalette() {
                     className="gap-2.5 font-mono text-[12px]"
                   >
                     <Icon className="size-4 shrink-0 text-gold/70" />
-                    <span className="truncate">{system.name}</span>
+                    <span dir="auto" className="truncate">{system.name}</span>
                     <span className="ms-auto shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60" dir="ltr">
                       {system.origin.slice(0, 4)}
                       {typeof records === "number" ? ` · ${records}R` : ""}
@@ -201,7 +201,7 @@ export function CommandPalette() {
                   className="gap-2.5 font-mono text-[12px]"
                 >
                   <Activity className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate text-muted-foreground">
+                  <span dir="auto" className="truncate text-muted-foreground">
                     {a.title}
                   </span>
                   <span className="ms-auto shrink-0 rounded-sm border border-border px-1 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground/60">

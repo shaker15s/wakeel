@@ -41,6 +41,7 @@ model AiSystem {
   capabilities String         @default("[]")
   records      SystemRecord[]
   runs         AutomationRun[]
+  shares       ShareLink[]
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
@@ -68,6 +69,18 @@ model AutomationRun {
   log        String   @default("[]") // JSON string: [{ t, line, level }]
   durationMs Int      @default(0)
   createdAt  DateTime @default(now())
+
+  @@index([systemId])
+}
+
+model ShareLink {
+  id        String   @id @default(cuid())
+  systemId  String
+  system    AiSystem @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  views     Int      @default(0)
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
 
   @@index([systemId])
 }

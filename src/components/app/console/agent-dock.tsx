@@ -3,7 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, Send, Sparkles } from "lucide-react";
+import {
+  Activity,
+  History,
+  Inbox,
+  Loader2,
+  Radar,
+  Send,
+  Sparkles,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { WakeelMark } from "@/components/app/logo";
 import { Button } from "@/components/ui/button";
@@ -28,6 +37,20 @@ function msgTime(iso: string) {
   } catch {
     return "--:--";
   }
+}
+
+function olderThanDays(iso: string, days: number) {
+  try {
+    return Date.now() - +new Date(iso) > days * 86_400_000;
+  } catch {
+    return false;
+  }
+}
+
+interface Insight {
+  id: string;
+  icon: LucideIcon;
+  text: string;
 }
 
 function TypingIndicator() {
@@ -70,18 +93,55 @@ function DockBody() {
   const messages = data?.messages ?? [];
   const systems = useMemo(() => systemsData?.systems ?? [], [systemsData]);
 
-  /** Proactive, workspace-aware suggestions (fed by real registry data). */
-  const suggestions = useMemo(() => {
-    const base = [t.dock.sugg1, t.dock.sugg2];
-    const withRecords = systems.find((s) => (s._count?.records ?? 0) > 0);
-    const forged = systems.find((s) => s.origin === "CREATED");
-    const extra = withRecords
-      ? t.dock.sugg3(withRecords.name)
-      : forged
-        ? t.dock.sugg3(forged.name)
-        : null;
-    return extra ? [base[0], extra, base[1]] : base;
+  /**
+   * Proactive, workspace-signal-driven suggestions. Each chip is grounded in
+   * real registry state: empty systems, stale systems, rich systems, cold start.
+   */
+  const insights = useMemo<Insight[]>(() => {
+    const out: Insight[] = [];
+    const active = systems.filter((s) => s.status === "ACTIVE");
+    if (systems.length === 0) {
+      out.push({ id: "cold", icon: Radar, text: t.dock.insightCold });
+    } else {
+      const empty = active.find(
+        (s) => s.origin === "CREATED" && (s._count?.records ?? 0) === 0
+      );
+      if (empty)
+        out.push({
+          id: "empty",
+          icon: Inbox,
+          text: t.dock.insightEmpty(empty.name),
+        });
+
+      const stale = [...active].sort(
+        (a, b) => +new Date(a.updatedAt) - +new Date(b.updatedAt)
+      )[0];
+      if (stale && olderThanDays(stale.updatedAt, 7))
+        out.push({
+          id: "stale",
+          icon: History,
+          text: t.dock.insightStale(stale.name),
+        });
+
+      const rich = active.find((s) => (s._count?.records ?? 0) >= 5);
+      if (rich)
+        out.push({
+          id: "rich",
+          icon: Activity,
+          text: t.dock.insightRich(rich.name),
+        });
+    }
+    return out.slice(0, 3);
   }, [systems, t]);
+
+  /** empty-state action list: insights first, generic quick-asks fill the rest */
+  const emptyStateActions = useMemo(() => {
+    const base: Insight[] = [
+      { id: "sugg1", icon: Sparkles, text: t.dock.sugg1 },
+      { id: "sugg2", icon: Sparkles, text: t.dock.sugg2 },
+    ];
+    return [...insights, ...base].slice(0, 4);
+  }, [insights, t]);
 
   const mutation = useMutation({
     mutationFn: (message: string) => sendChat(userId!, message),
@@ -147,22 +207,18 @@ function DockBody() {
               {t.dock.emptyCopy}
             </p>
             <div className="flex flex-col gap-2 pt-1">
-              {suggestions.map((s, i) => (
-                <button
-                  key={s}
-                  onClick={() => send(s)}
-                  className={cn(
-                    "flex items-center gap-2 rounded-sm border border-gold/25 bg-gold/5 px-3 py-2 text-start text-[12px] leading-snug text-gold transition-colors hover:bg-gold/15 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
-                    i === 0 ? "font-mono text-[11px]" : "font-mono text-[11px]"
-                  )}
+              {emptyStateActions.map((s, i) => (
+                <motion.button
+                  key={s.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.08 * i, duration: 0.3 }}
+                  onClick={() => send(s.text)}
+                  className="flex items-center gap-2 rounded-sm border border-gold/25 bg-gold/5 px-3 py-2 text-start font-mono text-[11px] leading-snug text-gold transition-colors hover:border-gold/50 hover:bg-gold/15 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
                 >
-                  {i === 0 ? (
-                    <Sparkles className="size-3 shrink-0 text-gold/70" />
-                  ) : (
-                    <span className="size-3 shrink-0" aria-hidden />
-                  )}
-                  {s}
-                </button>
+                  <s.icon className="size-3 shrink-0 text-gold/70" />
+                  {s.text}
+                </motion.button>
               ))}
             </div>
           </div>
@@ -218,6 +274,31 @@ function DockBody() {
           </div>
         )}
       </div>
+
+      {/* proactive insights — live above the composer once a conversation exists */}
+      {messages.length > 0 && insights.length > 0 && !mutation.isPending && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="wakeel-scrollbar flex shrink-0 gap-1.5 overflow-x-auto border-t border-border/60 px-3 py-2"
+          role="list"
+          aria-label={t.dock.titleB}
+        >
+          {insights.map((chip) => (
+            <button
+              key={chip.id}
+              role="listitem"
+              onClick={() => send(chip.text)}
+              title={chip.text}
+              className="flex shrink-0 items-center gap-1.5 rounded-full border border-gold/25 bg-gold/[0.06] px-3 py-1.5 font-mono text-[10px] leading-none text-gold/90 transition-all hover:border-gold/60 hover:bg-gold/15 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:scale-[0.97]"
+            >
+              <chip.icon className="size-3 shrink-0 text-gold/70" />
+              <span className="max-w-[240px] truncate">{chip.text}</span>
+            </button>
+          ))}
+        </motion.div>
+      )}
 
       {/* composer */}
       <form

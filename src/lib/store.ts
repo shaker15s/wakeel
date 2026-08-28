@@ -29,6 +29,8 @@ interface WakeelState {
   lastScan: LastScanPayload | null;
   /** latest forged system for the reveal card */
   lastForge: AiSystem | null;
+  /** token parsed from `#share=<token>` — drives the public read-only view */
+  shareToken: string | null;
 
   hydrate: () => void;
   setUserId: (id: string | null, opts?: { persist?: boolean }) => void;
@@ -63,6 +65,7 @@ export const useWakeel = create<WakeelState>((set) => ({
   lang: "en",
   hydrated: false,
   view: "landing",
+  shareToken: null,
   consoleTab: "overview",
   agentDockOpen: false,
   onboardingOpen: false,
@@ -74,13 +77,19 @@ export const useWakeel = create<WakeelState>((set) => ({
   hydrate: () => {
     let id: string | null = null;
     let lang: Lang = "en";
+    let shareToken: string | null = null;
     try {
       id = window.localStorage.getItem(STORAGE_KEY);
       lang = readStoredLang();
+      const m = /^#share=([A-Za-z0-9_-]+)$/.exec(window.location.hash);
+      if (m) shareToken = m[1];
     } catch {
       id = null;
     }
-    if (id) {
+    if (shareToken) {
+      // shared links render the public read-only view regardless of session
+      set({ shareToken, lang, view: "share", hydrated: true });
+    } else if (id) {
       set({ userId: id, lang, view: "console", hydrated: true });
     } else {
       set({ lang, hydrated: true });
@@ -125,7 +134,15 @@ export const useWakeel = create<WakeelState>((set) => ({
   setLastScan: (lastScan) => set({ lastScan }),
   setLastForge: (lastForge) => set({ lastForge }),
 
-  switchOperator: () =>
+  switchOperator: () => {
+    // scrub any share hash so back-navigation stays clean
+    try {
+      if (window.location.hash) {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    } catch {
+      // noop
+    }
     set({
       userId: null,
       view: "landing",
@@ -136,5 +153,7 @@ export const useWakeel = create<WakeelState>((set) => ({
       systemDetailId: null,
       lastScan: null,
       lastForge: null,
-    }),
+      shareToken: null,
+    });
+  },
 }));

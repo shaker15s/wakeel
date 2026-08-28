@@ -124,11 +124,11 @@ export function ActivityView() {
               </span>
               <TypeChip type={activity.type} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] text-foreground">
+                <p dir="auto" className="truncate text-[13px] text-foreground">
                   {activity.title}
                 </p>
                 {activity.detail && (
-                  <p className="truncate font-mono text-[11px] text-muted-foreground/70">
+                  <p dir="auto" className="truncate font-mono text-[11px] text-muted-foreground/70">
                     {activity.detail}
                   </p>
                 )}

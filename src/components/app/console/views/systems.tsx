@@ -15,7 +15,7 @@ import {
 } from "@/components/app/bits";
 import { MonoLabel } from "@/components/app/motion-bits";
 import { getSystems, parseCapabilities, recordCount } from "@/lib/api-client";
-import { useT } from "@/lib/i18n";
+import { recCount, useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 
 const GRID_ART = `  ┌───┐ ┌───┐ ┌───┐
@@ -115,7 +115,7 @@ export function SystemsView() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-medium text-foreground">
+                      <p dir="auto" className="truncate text-sm font-medium text-foreground">
                         {system.name}
                       </p>
                       <StatusDot status={system.status} />
@@ -143,7 +143,7 @@ export function SystemsView() {
                   <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/70">
                     <span dir="ltr">
                       {count != null
-                        ? t.sys.records(count)
+                        ? recCount(count, lang)
                         : t.sys.capabilities(capabilities.length)}
                     </span>
                     {isArchived && (

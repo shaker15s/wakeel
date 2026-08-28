@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -213,6 +213,16 @@ function SelectBox({
   );
 }
 
+/* ---------------------------- keyboard hint chip --------------------------- */
+
+function Kbd({ children }: { children: string }) {
+  return (
+    <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[3px] border border-border bg-secondary px-1 font-mono text-[9px] font-medium uppercase text-foreground/80 shadow-[inset_0_-1px_0_0_rgba(245,239,228,0.06)]">
+      {children}
+    </kbd>
+  );
+}
+
 /* ------------------------------- records tab ------------------------------- */
 
 export function RecordsTab({
@@ -237,6 +247,24 @@ export function RecordsTab({
   const [editDraft, setEditDraft] = useState<Record<string, unknown>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
+  /** keyboard cursor — index into `records`, moved with j/k, armed with x/e */
+  const [cursor, setCursor] = useState<number | null>(null);
+  const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
+
+  // keep the cursor valid as records come and go (adjust-during-render pattern)
+  const [prevLen, setPrevLen] = useState(records.length);
+  if (prevLen !== records.length) {
+    setPrevLen(records.length);
+    if (cursor !== null) {
+      setCursor(records.length === 0 ? null : Math.min(cursor, records.length - 1));
+    }
+  }
+
+  // follow the cursor with the scroll container
+  useEffect(() => {
+    if (cursor === null) return;
+    rowRefs.current.get(cursor)?.scrollIntoView({ block: "nearest" });
+  }, [cursor]);
 
   const addRecord = useMutation({
     mutationFn: () => createRecord(systemId, draft),
@@ -312,6 +340,38 @@ export function RecordsTab({
     setSelected(allSelected ? new Set() : new Set(records.map((r) => r.id)));
 
   const selectedRecords = records.filter((r) => selected.has(r.id));
+
+  /** power-user keyboard model: j/k move, x toggles, e edits, esc dismisses */
+  const onTableKeyDown = (e: React.KeyboardEvent) => {
+    const target = e.target as HTMLElement;
+    // let form fields and open menus consume their own keys
+    if (target.closest(
+      "input, textarea, select, [role='combobox'], [role='listbox'], [role='option'], [role='menu'], [data-radix-popper-content-wrapper]"
+    ))
+      return;
+    if (records.length === 0) return;
+    const key = e.key;
+    if (key === "j" || key === "J" || key === "ArrowDown") {
+      e.preventDefault();
+      setCursor((c) => (c === null ? 0 : Math.min(c + 1, records.length - 1)));
+    } else if (key === "k" || key === "K" || key === "ArrowUp") {
+      e.preventDefault();
+      setCursor((c) => (c === null ? 0 : Math.max(c - 1, 0)));
+    } else if (key === "x" || key === "X") {
+      if (cursor === null || isArchived) return;
+      e.preventDefault();
+      toggleRow(records[cursor].id);
+    } else if (key === "e" || key === "E") {
+      if (cursor === null || isArchived) return;
+      e.preventDefault();
+      const rec = records[cursor];
+      setAddingRecord(false);
+      setEditingId(rec.id);
+      setEditDraft({ ...parseRecordData(rec.data) });
+    } else if (key === "Escape") {
+      setCursor(null);
+    }
+  };
 
   return (
     <section className="flex min-w-0 flex-col gap-2.5">
@@ -530,101 +590,141 @@ export function RecordsTab({
           className="py-8"
         />
       ) : (
-        <div className="min-w-0 overflow-hidden rounded-lg border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-9 pr-0">
-                  <SelectBox
-                    checked={allSelected}
-                    indeterminate={someSelected}
-                    onChange={toggleAll}
-                    disabled={isArchived}
-                    label={t.recs.selectAll}
-                  />
-                </TableHead>
-                {columns.map((c) => (
-                  <TableHead
-                    key={c.key}
-                    className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
-                  >
-                    {c.label}
+        <>
+          <div
+            tabIndex={0}
+            onKeyDown={onTableKeyDown}
+            aria-label={t.recs.header(records.length)}
+            className="min-w-0 overflow-hidden rounded-lg border border-border transition-shadow focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gold/50"
+          >
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-9 pr-0">
+                    <SelectBox
+                      checked={allSelected}
+                      indeterminate={someSelected}
+                      onChange={toggleAll}
+                      disabled={isArchived}
+                      label={t.recs.selectAll}
+                    />
                   </TableHead>
-                ))}
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {records.map((rec) => {
-                const data = parseRecordData(rec.data);
-                const isEditing = rec.id === editingId;
-                const isSelected = selected.has(rec.id);
-                return (
-                  <TableRow
-                    key={rec.id}
-                    data-selected={isSelected || isEditing || undefined}
-                    className={cn(
-                      "transition-colors",
-                      (isSelected || isEditing) &&
-                        "bg-gold/[0.06] hover:bg-gold/[0.09]"
-                    )}
-                  >
-                    <TableCell className="pr-0">
-                      <SelectBox
-                        checked={isSelected}
-                        onChange={() => toggleRow(rec.id)}
-                        disabled={isArchived}
-                        label={t.recs.selectOne(renderCellValue(data[columns[0]?.key ?? "id"]))}
-                      />
-                    </TableCell>
-                    {columns.map((c) => (
-                      <TableCell
-                        key={c.key}
-                        className="max-w-[220px] truncate text-[13px] text-foreground/90"
-                      >
-                        {renderCellValue(data[c.key])}
+                  {columns.map((c) => (
+                    <TableHead
+                      key={c.key}
+                      className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
+                    >
+                      {c.label}
+                    </TableHead>
+                  ))}
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {records.map((rec, idx) => {
+                  const data = parseRecordData(rec.data);
+                  const isEditing = rec.id === editingId;
+                  const isSelected = selected.has(rec.id);
+                  const isCursor = cursor === idx;
+                  return (
+                    <TableRow
+                      key={rec.id}
+                      ref={(el) => {
+                        if (el) rowRefs.current.set(idx, el);
+                        else rowRefs.current.delete(idx);
+                      }}
+                      data-selected={isSelected || isEditing || undefined}
+                      data-cursor={isCursor || undefined}
+                      className={cn(
+                        "transition-colors",
+                        (isSelected || isEditing) &&
+                          "bg-gold/[0.06] hover:bg-gold/[0.09]",
+                        isCursor &&
+                          !isSelected &&
+                          !isEditing &&
+                          "bg-gold/[0.045] hover:bg-gold/[0.07]",
+                        // gold inline-start rail marks the keyboard cursor
+                        isCursor &&
+                          "shadow-[inset_2px_0_0_0_#E8B44A] rtl:shadow-[inset_-2px_0_0_0_#E8B44A]"
+                      )}
+                    >
+                      <TableCell className="pr-0">
+                        <SelectBox
+                          checked={isSelected}
+                          onChange={() => toggleRow(rec.id)}
+                          disabled={isArchived}
+                          label={t.recs.selectOne(renderCellValue(data[columns[0]?.key ?? "id"]))}
+                        />
                       </TableCell>
-                    ))}
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            className="flex size-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-                            aria-label={t.recs.recActions}
-                          >
-                            <MoreHorizontal className="size-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          className="border-border bg-popover"
+                      {columns.map((c) => (
+                        <TableCell
+                          key={c.key}
+                          dir="auto"
+                          className="max-w-[220px] truncate text-[13px] text-foreground/90"
                         >
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setAddingRecord(false);
-                              setEditingId(rec.id);
-                              setEditDraft({ ...data });
-                            }}
-                            disabled={isArchived}
-                            className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-gold/10 focus:text-gold"
+                          {renderCellValue(data[c.key])}
+                        </TableCell>
+                      ))}
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              className="flex size-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                              aria-label={t.recs.recActions}
+                            >
+                              <MoreHorizontal className="size-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            className="border-border bg-popover"
                           >
-                            <Pencil className="size-3.5" /> {t.recs.edit}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => removeRecord.mutate(rec.id)}
-                            className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-destructive/10 focus:text-destructive"
-                          >
-                            <Trash2 className="size-3.5" /> {t.common.delete}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setAddingRecord(false);
+                                setEditingId(rec.id);
+                                setEditDraft({ ...data });
+                              }}
+                              disabled={isArchived}
+                              className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-gold/10 focus:text-gold"
+                            >
+                              <Pencil className="size-3.5" /> {t.recs.edit}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => removeRecord.mutate(rec.id)}
+                              className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-destructive/10 focus:text-destructive"
+                            >
+                              <Trash2 className="size-3.5" /> {t.common.delete}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          {/* keyboard hints — OPS-DECK power-user affordance */}
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 px-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60"
+            aria-hidden
+          >
+            <span className="flex items-center gap-1">
+              <Kbd>J</Kbd>
+              <Kbd>K</Kbd> {t.recs.kbdNav}
+            </span>
+            <span className="flex items-center gap-1">
+              <Kbd>X</Kbd> {t.recs.kbdSelect}
+            </span>
+            <span className="flex items-center gap-1">
+              <Kbd>E</Kbd> {t.recs.kbdEdit}
+            </span>
+            <span className="flex items-center gap-1">
+              <Kbd>Esc</Kbd> {t.recs.kbdClear}
+            </span>
+          </div>
+        </>
       )}
 
       {/* bulk delete confirm */}

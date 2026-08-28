@@ -17,7 +17,7 @@ import {
 } from "@/components/app/bits";
 import { CountUp, MonoLabel } from "@/components/app/motion-bits";
 import { getActivity, getSystems, getUser, recordCount } from "@/lib/api-client";
-import { useT } from "@/lib/i18n";
+import { recCount, useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 
 const RADAR_ART = `   · · · · · · ·
@@ -87,8 +87,12 @@ export function OverviewView() {
         <MonoLabel gold>
           [ <span dir="auto">{dateLabel}</span> · {t.ov.consoleTag} ]
         </MonoLabel>
+        {/* bdi isolates Latin operator names inside the RTL sentence so the
+            trailing punctuation stays on the correct side of the name */}
         <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-          {greetingFor(hour, t)}, {firstName}.
+          {greetingFor(hour, t)}
+          {lang === "ar" ? "،" : ","} <bdi>{firstName}</bdi>
+          {lang === "ar" ? "\u200F." : "."}
         </h1>
         <p className="text-sm text-muted-foreground">
           {stats && stats.systems > 0
@@ -203,7 +207,7 @@ export function OverviewView() {
                         <Icon className="size-4" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">
+                        <p dir="auto" className="truncate text-sm font-medium text-foreground">
                           {system.name}
                         </p>
                         <MonoLabel className="text-[9px]">{system.category}</MonoLabel>
@@ -213,7 +217,7 @@ export function OverviewView() {
                     <div className="flex items-center gap-2">
                       <HealthBar value={system.health} className="flex-1" />
                       <span className="font-mono text-[10px] tabular-nums text-muted-foreground" dir="ltr">
-                        {count != null ? `${count} ${t.ov.rec}` : `${system.health}%`}
+                        {count != null ? recCount(count, lang) : `${system.health}%`}
                       </span>
                     </div>
                   </motion.button>
@@ -249,7 +253,7 @@ export function OverviewView() {
                     className="flex items-center gap-2.5 border-b border-border/60 px-2 py-2.5 last:border-0"
                   >
                     <TypeChip type={a.type} />
-                    <span className="min-w-0 flex-1 truncate text-[13px] text-foreground/90">
+                    <span dir="auto" className="min-w-0 flex-1 truncate text-[13px] text-foreground/90">
                       {a.title}
                     </span>
                     <span className="shrink-0 font-mono text-[10px] text-muted-foreground" dir="ltr">

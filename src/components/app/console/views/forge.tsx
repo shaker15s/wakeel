@@ -24,7 +24,7 @@ import {
   recordCount,
 } from "@/lib/api-client";
 import type { AiSystem } from "@/lib/api-client";
-import { useT } from "@/lib/i18n";
+import { recCount, useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 
 const ANVIL_ART = `   ┌─────────────┐
@@ -389,12 +389,12 @@ export function ForgeView() {
                   }
                 >
                   <Icon className="size-4 shrink-0 text-gold" />
-                  <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">
+                  <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground" dir="auto">
                     {system.name}
                   </span>
                   <CategoryChip category={system.category} className="hidden sm:inline-flex" />
                   <span className="font-mono text-[11px] tabular-nums text-muted-foreground" dir="ltr">
-                    {count != null ? `${count} ${t.forge.rec}` : "—"}
+                    {count != null ? recCount(count, lang) : "—"}
                   </span>
                   <span className="font-mono text-[11px] text-muted-foreground" dir="ltr">
                     {timeAgo(system.createdAt, lang)}

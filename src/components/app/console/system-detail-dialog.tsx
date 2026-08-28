@@ -8,6 +8,7 @@ import {
   ArchiveRestore,
   ChartColumn,
   Loader2,
+  Share2,
   Table2,
   Trash2,
   Workflow,
@@ -52,6 +53,7 @@ import { cn } from "@/lib/utils";
 import { RecordsTab } from "./system-detail/records-tab";
 import { AutomationsTab } from "./system-detail/automations-tab";
 import { AnalyticsTab } from "./system-detail/analytics-tab";
+import { ShareDialog } from "./share-dialog";
 
 type DetailTab = "overview" | "records" | "automations" | "analytics";
 
@@ -67,8 +69,9 @@ export function SystemDetailDialog() {
 
   const [tab, setTab] = useState<DetailTab>("overview");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["records", systemId],
     queryFn: () => getSystemDetail(systemId!),
     enabled: !!systemId,
@@ -101,6 +104,7 @@ export function SystemDetailDialog() {
     setPrevSystemId(systemId);
     setTab("overview");
     setConfirmDelete(false);
+    setShareOpen(false);
   }
 
   const invalidateAll = () => {
@@ -171,7 +175,10 @@ export function SystemDetailDialog() {
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-40 w-full rounded-lg" />
           </div>
-        ) : isError || !system ? (
+        ) : !system ? (
+          // Only a truly missing/unloadable system renders the error card.
+          // Cached content stays visible when a background refetch fails
+          // (e.g. a cancelled in-flight request resurfacing after a remount).
           <div className="flex flex-col items-center gap-3 py-10 text-center">
             <DialogTitle className="sr-only">{t.detail.unavailTitle}</DialogTitle>
             <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-destructive">
@@ -197,7 +204,7 @@ export function SystemDetailDialog() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <DialogTitle className="font-display text-xl font-bold tracking-tight">
+                      <DialogTitle dir="auto" className="font-display text-xl font-bold tracking-tight">
                         {system.name}
                       </DialogTitle>
                       <OriginBadge origin={system.origin} />
@@ -206,9 +213,18 @@ export function SystemDetailDialog() {
                       <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                         {system.status}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => setShareOpen(true)}
+                        className="ms-auto flex items-center gap-1.5 rounded-sm border border-border px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-gold/40 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                        aria-label={t.share.button}
+                      >
+                        <Share2 className="size-3" />
+                        {t.share.button}
+                      </button>
                     </div>
                     {system.description && (
-                      <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                      <p dir="auto" className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
                         {system.description}
                       </p>
                     )}
@@ -517,6 +533,12 @@ export function SystemDetailDialog() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <ShareDialog
+        systemId={systemId}
+        systemName={system?.name ?? ""}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
     </Dialog>
   );
 }

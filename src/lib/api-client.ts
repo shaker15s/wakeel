@@ -8,7 +8,7 @@
 
 /* ---------------------------------- types --------------------------------- */
 
-export type View = "landing" | "console";
+export type View = "landing" | "console" | "share";
 
 export type ConsoleTab =
   | "overview"
@@ -30,6 +30,7 @@ export type ActivityType =
   | "RECORD"
   | "CHAT"
   | "STATUS"
+  | "SHARE"
   | "AUTOMATION";
 
 export interface Operator {
@@ -493,4 +494,58 @@ export function recordCount(system: AiSystem): number | null {
   if (typeof system.recordsCount === "number") return system.recordsCount;
   if (typeof system._count?.records === "number") return system._count.records;
   return null;
+}
+
+/* --------------------------------- sharing -------------------------------- */
+
+export interface ShareLinkInfo {
+  token: string;
+  url: string;
+  views: number;
+  createdAt: string;
+}
+
+export interface SharedSystem {
+  name: string;
+  description: string;
+  category: string;
+  icon: string;
+  color: string;
+  origin: string;
+  status: string;
+  health: number;
+  blueprint: {
+    summary: string;
+    fields: BlueprintField[];
+    automations: string[];
+    views: string[];
+  };
+  createdAt: string;
+}
+
+export interface SharedSystemPayload {
+  system: SharedSystem;
+  workspace: string;
+  records: { data: string; createdAt: string }[];
+  meta: { views: number; sharedAt: string };
+}
+
+/** GET /api/systems/[id]/share — the live link for a system (or null). */
+export async function getShareLink(systemId: string): Promise<{ share: ShareLinkInfo | null }> {
+  return api(`/api/systems/${systemId}/share`);
+}
+
+/** POST /api/systems/[id]/share — create (or fetch) the live read-only link. */
+export async function createShareLink(systemId: string): Promise<{ share: ShareLinkInfo; created: boolean }> {
+  return api(`/api/systems/${systemId}/share`, { method: "POST" });
+}
+
+/** DELETE /api/systems/[id]/share — revoke the live read-only link. */
+export async function revokeShareLink(systemId: string): Promise<{ ok: boolean }> {
+  return api(`/api/systems/${systemId}/share`, { method: "DELETE" });
+}
+
+/** GET /api/share/[token] — PUBLIC read-only payload (no auth). */
+export async function getSharedSystem(token: string): Promise<SharedSystemPayload> {
+  return api(`/api/share/${encodeURIComponent(token)}`);
 }
