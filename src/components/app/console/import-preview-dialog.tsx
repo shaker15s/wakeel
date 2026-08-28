@@ -85,9 +85,11 @@ export function ImportPreviewDialog({
       <DialogContent
         aria-describedby={undefined}
         showCloseButton={!importing}
-        className="corner-frame max-w-lg border-border bg-card p-0 shadow-[0_0_90px_-12px_rgba(232,180,74,0.18)]"
+        className="wakeel-scrollbar max-h-[88vh] max-w-lg overflow-y-auto border-border bg-card p-0 shadow-[0_0_90px_-12px_rgba(232,180,74,0.18)]"
       >
-        <div className="relative overflow-hidden">
+        {/* corner-frame lives on the inner wrapper — on DialogContent it would
+            override the `fixed` positioning (`.corner-frame` sets relative) */}
+        <div className="corner-frame relative overflow-hidden">
           <div className="bg-blueprint pointer-events-none absolute inset-0 opacity-50" />
           <div className="relative p-5 sm:p-6">
             <DialogHeader className="gap-2 text-start">
