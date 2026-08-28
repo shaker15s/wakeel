@@ -91,6 +91,9 @@ export function Sidebar({ className }: { className?: string }) {
 
       <div className="mt-auto hidden px-3 lg:block">
         <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/60">
+          {t.side.hintKeys}
+        </p>
+        <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/60">
           {t.side.version}
         </p>
       </div>

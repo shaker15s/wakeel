@@ -1,8 +1,43 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { motion, useInView } from "framer-motion";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import {
+  motion,
+  useInView,
+  useMotionValue,
+  useSpring,
+} from "framer-motion";
 import { cn } from "@/lib/utils";
+
+/* ------------------------- media query helpers ----------------------------- */
+
+/** SSR-safe media query via useSyncExternalStore — zero cascading renders. */
+export function useMediaQuery(query: string): boolean {
+  const subscribe = useCallback(
+    (cb: () => void) => {
+      const mq = window.matchMedia(query);
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    [query]
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia(query).matches,
+    () => false
+  );
+}
+
+/** True when the operator asked the OS for reduced motion. */
+export function usePrefersReducedMotion() {
+  return useMediaQuery("(prefers-reduced-motion: reduce)");
+}
 
 /* ------------------------------ animated counter -------------------------- */
 
@@ -181,5 +216,225 @@ export function SectionHeading({
         </p>
       )}
     </Reveal>
+  );
+}
+
+/* ── elite interaction layer ─────────────────────────────────────────────── */
+
+/* ------------------------------ magnetic pull ----------------------------- */
+
+/**
+ * Magnetic — children subtly gravitate toward the cursor while hovered,
+ * then spring back. Pure transform (GPU), pointer-fine devices only.
+ */
+export function Magnetic({
+  children,
+  strength = 0.28,
+  className,
+}: {
+  children: React.ReactNode;
+  strength?: number;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const reduced = usePrefersReducedMotion();
+  const fine = useMediaQuery("(pointer: fine)");
+  const mx = useMotionValue(0);
+  const my = useMotionValue(0);
+  const x = useSpring(mx, { stiffness: 160, damping: 15, mass: 0.35 });
+  const y = useSpring(my, { stiffness: 160, damping: 15, mass: 0.35 });
+
+  const onMove = (e: React.MouseEvent) => {
+    if (reduced || !fine || !ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    mx.set((e.clientX - (r.left + r.width / 2)) * strength);
+    my.set((e.clientY - (r.top + r.height / 2)) * strength);
+  };
+  const reset = () => {
+    mx.set(0);
+    my.set(0);
+  };
+
+  return (
+    <motion.div
+      ref={ref}
+      onMouseMove={onMove}
+      onMouseLeave={reset}
+      style={{ x, y }}
+      className={cn("inline-block", className)}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/* ------------------------------ decode text ------------------------------- */
+
+const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#/\\<>_·";
+
+/**
+ * ScrambleText — "signal lock" decode effect: characters resolve from
+ * random glyphs into the real string as the element enters the viewport.
+ * Skipped entirely for reduced-motion operators (renders the final text).
+ */
+export function ScrambleText({
+  text,
+  className,
+  speed = 26,
+  startDelay = 0,
+}: {
+  text: string;
+  className?: string;
+  /** ms between reveal steps */
+  speed?: number;
+  startDelay?: number;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-20px" });
+  const reduced = usePrefersReducedMotion();
+  const [out, setOut] = useState(text);
+
+  useEffect(() => {
+    if (reduced || !inView) return;
+    let i = 0;
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const kick = setTimeout(() => {
+      interval = setInterval(() => {
+        i += Math.max(1, Math.round(text.length / 18));
+        if (i >= text.length) {
+          setOut(text);
+          if (interval) clearInterval(interval);
+          return;
+        }
+        const noise = Array.from(
+          { length: text.length - i },
+          () => GLYPHS[Math.floor(Math.random() * GLYPHS.length)]
+        ).join("");
+        setOut(text.slice(0, i) + noise);
+      }, speed);
+    }, startDelay);
+    return () => {
+      clearTimeout(kick);
+      if (interval) clearInterval(interval);
+    };
+  }, [inView, text, speed, startDelay, reduced]);
+
+  const display = reduced ? text : out;
+
+  return (
+    <span ref={ref} className={className} aria-label={text}>
+      <span aria-hidden>{display}</span>
+    </span>
+  );
+}
+
+/* ------------------------------ cursor spotlight -------------------------- */
+
+/**
+ * Spotlight — a soft radial glow that tracks the cursor inside the parent
+ * section. Decorative only (pointer-events-none, aria-hidden).
+ */
+export function Spotlight({
+  className,
+  radius = 520,
+  color = "rgba(232,180,74,0.075)",
+}: {
+  className?: string;
+  radius?: number;
+  color?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!window.matchMedia("(pointer: fine)").matches) return;
+    let raf = 0;
+    const onMove = (e: MouseEvent) => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const el = ref.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        if (
+          e.clientX < r.left ||
+          e.clientX > r.right ||
+          e.clientY < r.top ||
+          e.clientY > r.bottom
+        ) {
+          setPos(null);
+          return;
+        }
+        setPos({ x: e.clientX - r.left, y: e.clientY - r.top });
+      });
+    };
+    window.addEventListener("mousemove", onMove, { passive: true });
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute inset-0 transition-opacity duration-500",
+        pos ? "opacity-100" : "opacity-0",
+        className
+      )}
+      style={{
+        background: `radial-gradient(${radius}px circle at ${pos?.x ?? 0}px ${pos?.y ?? 0}px, ${color}, transparent 65%)`,
+      }}
+    />
+  );
+}
+
+/* --------------------------------- tilt card ------------------------------ */
+
+/**
+ * TiltCard — 3D perspective tilt that follows the cursor. Springs back to
+ * flat on leave. Disabled for touch + reduced-motion operators.
+ */
+export function TiltCard({
+  children,
+  className,
+  max = 5,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  max?: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const reduced = usePrefersReducedMotion();
+  const fine = useMediaQuery("(pointer: fine)");
+  const rmx = useMotionValue(0);
+  const rmy = useMotionValue(0);
+  const rotateX = useSpring(rmx, { stiffness: 220, damping: 20 });
+  const rotateY = useSpring(rmy, { stiffness: 220, damping: 20 });
+
+  const onMove = (e: React.MouseEvent) => {
+    if (reduced || !fine || !ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width - 0.5;
+    const py = (e.clientY - r.top) / r.height - 0.5;
+    rmy.set(px * max * 2);
+    rmx.set(-py * max * 2);
+  };
+  const reset = () => {
+    rmx.set(0);
+    rmy.set(0);
+  };
+
+  return (
+    <motion.div
+      ref={ref}
+      onMouseMove={onMove}
+      onMouseLeave={reset}
+      style={{ rotateX, rotateY, transformPerspective: 900 }}
+      className={className}
+    >
+      {children}
+    </motion.div>
   );
 }

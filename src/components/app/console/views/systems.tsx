@@ -166,9 +166,15 @@ export function SystemsView() {
                     }}
                     whileHover={{ y: -4 }}
                     onClick={() => openSystemDetail(system.id)}
+                    onMouseMove={(e) => {
+                      // cursor-tracked glow — CSS vars, zero re-renders
+                      const r = e.currentTarget.getBoundingClientRect();
+                      e.currentTarget.style.setProperty("--gx", `${e.clientX - r.left}px`);
+                      e.currentTarget.style.setProperty("--gy", `${e.clientY - r.top}px`);
+                    }}
                     data-cursor={isCursor || undefined}
                     className={cn(
-                      "group flex flex-col gap-3 rounded-lg border bg-card p-4 text-start transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+                      "group relative flex flex-col gap-3 overflow-hidden rounded-lg border bg-card p-4 text-start transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
                       isArchived
                         ? "border-border/60 opacity-60 hover:border-border"
                         : "border-border hover:border-gold/40",
@@ -177,6 +183,15 @@ export function SystemsView() {
                         "border-gold/50 shadow-[inset_2px_0_0_0_#E8B44A] rtl:shadow-[inset_-2px_0_0_0_#E8B44A]"
                     )}
                   >
+                    {/* cursor spotlight inside the card */}
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                      style={{
+                        background:
+                          "radial-gradient(220px circle at var(--gx, 50%) var(--gy, 50%), rgba(232,180,74,0.09), transparent 62%)",
+                      }}
+                    />
                 <div className="flex items-start gap-3">
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-sm border border-border bg-secondary text-muted-foreground transition-colors group-hover:border-gold/40 group-hover:text-gold">
                     <Icon className="size-5" />

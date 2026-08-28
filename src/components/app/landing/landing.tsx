@@ -8,7 +8,12 @@ import { Nav } from "@/components/app/landing/nav";
 import { OpsTicker } from "@/components/app/landing/ticker";
 import { Protocol } from "@/components/app/landing/protocol";
 import { Button } from "@/components/ui/button";
-import { MonoLabel, Reveal } from "@/components/app/motion-bits";
+import {
+  Magnetic,
+  MonoLabel,
+  Reveal,
+  Spotlight,
+} from "@/components/app/motion-bits";
 import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 
@@ -25,8 +30,12 @@ export function Landing() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
+      {/* keyboard operators can jump straight past the nav */}
+      <a href="#main-content" className="skip-link border border-gold/40 bg-card px-4 py-2 font-mono text-[11px] uppercase tracking-[0.14em] text-gold shadow-[0_0_24px_-6px_rgba(232,180,74,0.6)]">
+        {t.common.skip}
+      </a>
       <Nav />
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1 focus:outline-none">
         <Hero />
         <OpsTicker />
         <Protocol />
@@ -44,6 +53,7 @@ export function Landing() {
             }}
           />
           <div className="bg-blueprint pointer-events-none absolute inset-0 opacity-50" aria-hidden />
+          <Spotlight radius={560} color="rgba(232,180,74,0.05)" />
           <div className="noise" aria-hidden />
           <Reveal className="relative mx-auto flex max-w-3xl flex-col items-center gap-6 px-4 text-center">
             <MonoLabel gold>[ {t.cta.eyebrow} ]</MonoLabel>
@@ -54,13 +64,15 @@ export function Landing() {
             <p className="max-w-xl text-base leading-relaxed text-muted-foreground">
               {t.cta.copy}
             </p>
-            <Button
-              onClick={hire}
-              size="lg"
-              className="h-12 bg-primary px-8 font-mono text-[12px] uppercase tracking-[0.14em] text-primary-foreground shadow-[0_0_28px_-6px_rgba(232,180,74,0.5)] hover:bg-gold-pale"
-            >
-              {t.cta.button}
-            </Button>
+            <Magnetic strength={0.24}>
+              <Button
+                onClick={hire}
+                size="lg"
+                className="btn-shine h-12 bg-primary px-8 font-mono text-[12px] uppercase tracking-[0.14em] text-primary-foreground shadow-[0_0_28px_-6px_rgba(232,180,74,0.5)] hover:bg-gold-pale"
+              >
+                {t.cta.button}
+              </Button>
+            </Magnetic>
           </Reveal>
         </section>
       </main>

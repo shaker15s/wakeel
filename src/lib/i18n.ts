@@ -23,6 +23,7 @@ export const en = {
     save: "Save",
     loading: "Loading…",
     per: "·",
+    skip: "Skip to main content",
   },
 
   nav: {
@@ -168,6 +169,16 @@ export const en = {
 
   boot: {
     booting: "WAKEEL // BOOTING",
+    title: "WAKEEL OPS DECK",
+    sub: "INITIALIZING CONSOLE",
+    lines: [
+      "AUTH … OPERATOR ACCEPTED",
+      "SYSTEMS BUS … ONLINE",
+      "AGENT LINK … HANDSHAKE OK",
+      "LEDGER … SYNCED",
+    ],
+    ready: "CONSOLE READY",
+    skip: "PRESS ANY KEY TO SKIP",
   },
 
   sb: {
@@ -224,6 +235,7 @@ export const en = {
     activity: "Activity",
     version: "WAKEEL v0.1 · و",
     navLabel: "Console navigation",
+    hintKeys: "PRESS 1–5 TO SWITCH VIEWS",
   },
 
   ov: {
@@ -647,6 +659,7 @@ export const ar: Dict = {
     save: "حفظ",
     loading: "جارٍ التحميل…",
     per: "·",
+    skip: "تخطَّ إلى المحتوى الرئيسي",
   },
 
   nav: {
@@ -792,6 +805,16 @@ export const ar: Dict = {
 
   boot: {
     booting: "واكيل // إقلاع",
+    title: "WAKEEL OPS DECK",
+    sub: "جارٍ تهيئة الكونسول",
+    lines: [
+      "المصادقة … تم قبول المشغّل",
+      "ناقل الأنظمة … متصل",
+      "ربط الوكيل … مصافحة ناجحة",
+      "الدفتر … تمت المزامنة",
+    ],
+    ready: "الكونسول جاهز",
+    skip: "اضغط أي مفتاح للتخطي",
   },
 
   sb: {
@@ -848,6 +871,7 @@ export const ar: Dict = {
     activity: "النشاط",
     version: "واكيل v0.1 · و",
     navLabel: "تنقل الكونسول",
+    hintKeys: "اضغط 1–5 لتبديل الشاشات",
   },
 
   ov: {

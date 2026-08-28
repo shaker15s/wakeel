@@ -146,6 +146,25 @@
     background: #e8b44a;
     color: #0a0908;
   }
+  /* ── elite focus ring: high-visibility gold for keyboard operators ────── */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid rgba(232, 180, 74, 0.9);
+    outline-offset: 2px;
+  }
+
+  /* skip-link is invisible until focused, then it is unmissable */
+  .skip-link {
+    position: fixed;
+    top: 0.75rem;
+    inset-inline-start: 0.75rem;
+    z-index: 200;
+    transform: translateY(-300%);
+    transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .skip-link:focus-visible {
+    transform: translateY(0);
+  }
+
   /* thin mission-control scrollbar — gold thumb on hover */
   ::-webkit-scrollbar {
     width: 8px;
@@ -372,6 +391,92 @@
   }
 }
 
+/* ── elite motion layer ─────────────────────────────────────────────────── */
+
+/* slow drifting aurora blob behind the hero */
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(-4%, -3%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(3%, 4%, 0) scale(1.1);
+  }
+  100% {
+    transform: translate3d(5%, -2%, 0) scale(1.04);
+  }
+}
+.animate-aurora {
+  animation: aurora-drift 18s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+/* one-shot diagonal shine sweep for primary CTAs (triggered on hover) */
+@keyframes shine-sweep {
+  from {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  to {
+    transform: translateX(230%) skewX(-18deg);
+  }
+}
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+}
+.btn-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(255, 252, 240, 0.4) 50%,
+    transparent 62%
+  );
+  transform: translateX(-130%) skewX(-18deg);
+}
+.btn-shine:hover::after,
+.btn-shine:focus-visible::after {
+  animation: shine-sweep 0.85s cubic-bezier(0.22, 1, 0.36, 1) 1;
+}
+
+/* boot progress bar sweep */
+@keyframes boot-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.animate-boot-progress {
+  transform-origin: left;
+  animation: boot-progress 2s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+
+/* underline draw-in for nav links */
+.nav-underline::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: -4px;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    rgba(232, 180, 74, 0.1),
+    rgba(232, 180, 74, 0.9),
+    rgba(232, 180, 74, 0.1)
+  );
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.nav-underline:hover::after,
+.nav-underline:focus-visible::after {
+  transform: scaleX(1);
+}
+
 /* marquee pauses when the operator reads it */
 .ticker-hover:hover .animate-ticker {
   animation-play-state: paused;
@@ -428,8 +533,16 @@ html[dir="rtl"] kbd {
   .animate-scan-line,
   .animate-blink,
   .animate-forge-pulse,
-  .animate-report-in {
+  .animate-report-in,
+  .animate-aurora,
+  .animate-boot-progress {
     animation: none;
+  }
+  .animate-boot-progress {
+    transform: scaleX(1);
+  }
+  .btn-shine::after {
+    display: none;
   }
   html {
     scroll-behavior: auto;

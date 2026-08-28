@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DirectionProvider } from "@radix-ui/react-direction";
 import { AppShellSkeleton } from "@/components/app/app-shell-skeleton";
@@ -61,6 +61,8 @@ export function AppShell() {
   return (
     <QueryClientProvider client={queryClient}>
       <DirectionProvider dir={lang === "ar" ? "rtl" : "ltr"}>
+      {/* framer animations collapse gracefully when the OS asks for calm */}
+      <MotionConfig reducedMotion="user">
       <AnimatePresence mode="wait">
         {!hydrated ? (
           <motion.div
@@ -105,6 +107,7 @@ export function AppShell() {
         )}
       </AnimatePresence>
       <OnboardingDialog />
+      </MotionConfig>
       </DirectionProvider>
     </QueryClientProvider>
   );

@@ -1,10 +1,22 @@
 "use client";
 
 import Image from "next/image";
-import { motion } from "framer-motion";
+import { useRef } from "react";
+import {
+  motion,
+  useMotionValue,
+  useSpring,
+} from "framer-motion";
 import { ArrowDown, Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CountUp, MonoLabel } from "@/components/app/motion-bits";
+import {
+  CountUp,
+  Magnetic,
+  MonoLabel,
+  ScrambleText,
+  Spotlight,
+  usePrefersReducedMotion,
+} from "@/components/app/motion-bits";
 import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 
@@ -28,6 +40,21 @@ export function Hero() {
   const setOnboardingOpen = useWakeel((s) => s.setOnboardingOpen);
   const userId = useWakeel((s) => s.userId);
   const setView = useWakeel((s) => s.setView);
+  const reduced = usePrefersReducedMotion();
+
+  // mouse parallax for the radar orb (spring-smoothed, pointer-fine only)
+  const sectionRef = useRef<HTMLElement>(null);
+  const ox = useMotionValue(0);
+  const oy = useMotionValue(0);
+  const orbX = useSpring(ox, { stiffness: 60, damping: 18 });
+  const orbY = useSpring(oy, { stiffness: 60, damping: 18 });
+
+  const onSectionMove = (e: React.MouseEvent) => {
+    if (reduced || !sectionRef.current) return;
+    const r = sectionRef.current.getBoundingClientRect();
+    ox.set(((e.clientX - r.left) / r.width - 0.5) * 18);
+    oy.set(((e.clientY - r.top) / r.height - 0.5) * 14);
+  };
 
   const hire = () => {
     if (userId) setView("console");
@@ -35,7 +62,12 @@ export function Hero() {
   };
 
   return (
-    <section id="top" className="relative flex min-h-screen flex-col overflow-hidden">
+    <section
+      id="top"
+      ref={sectionRef}
+      onMouseMove={onSectionMove}
+      className="relative flex min-h-screen flex-col overflow-hidden"
+    >
       {/* ---- background layers ---- */}
       <div className="absolute inset-0" aria-hidden>
         <Image
@@ -48,6 +80,14 @@ export function Hero() {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-background via-background/55 to-background" />
         <div className="absolute inset-0 bg-gradient-to-r from-background via-background/30 to-background/70" />
+        {/* drifting aurora — keeps the backdrop alive */}
+        <div
+          className="animate-aurora absolute -left-1/4 top-1/4 size-[720px] rounded-full opacity-70"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(232,180,74,0.055) 0%, transparent 60%)",
+          }}
+        />
         <div className="bg-blueprint absolute inset-0" />
         {/* slow radar conic sweep */}
         <div
@@ -61,6 +101,7 @@ export function Hero() {
               "radial-gradient(circle, black 0%, black 52%, transparent 72%)",
           }}
         />
+        <Spotlight radius={620} color="rgba(232,180,74,0.06)" />
         <div className="noise" />
       </div>
 
@@ -74,7 +115,7 @@ export function Hero() {
             transition={{ duration: 0.6, ease }}
           >
             <MonoLabel gold className="border border-gold/25 bg-gold/5 px-2.5 py-1.5">
-              [ {t.hero.eyebrow} ]
+              [ <ScrambleText text={t.hero.eyebrow} speed={22} startDelay={350} /> ]
             </MonoLabel>
           </motion.div>
 
@@ -103,12 +144,14 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 0.3, ease }}
             className="mt-2 flex flex-wrap items-center gap-3"
           >
-            <Button
-              onClick={hire}
-              className="h-12 bg-primary px-7 font-mono text-[12px] uppercase tracking-[0.14em] text-primary-foreground shadow-[0_0_28px_-6px_rgba(232,180,74,0.5)] hover:bg-gold-pale hover:shadow-[0_0_36px_-4px_rgba(232,180,74,0.65)]"
-            >
-              {t.hero.ctaPrimary}
-            </Button>
+            <Magnetic strength={0.22}>
+              <Button
+                onClick={hire}
+                className="btn-shine h-12 bg-primary px-7 font-mono text-[12px] uppercase tracking-[0.14em] text-primary-foreground shadow-[0_0_28px_-6px_rgba(232,180,74,0.5)] hover:bg-gold-pale hover:shadow-[0_0_36px_-4px_rgba(232,180,74,0.65)]"
+              >
+                {t.hero.ctaPrimary}
+              </Button>
+            </Magnetic>
             <Button
               asChild
               variant="ghost"
@@ -142,8 +185,11 @@ export function Hero() {
             className="absolute size-[300px] rounded-full border border-border sm:size-[380px]"
           />
 
-          {/* orb image in circular frame */}
-          <div className="relative size-[280px] overflow-hidden rounded-full border border-gold/20 shadow-[0_0_80px_-20px_rgba(232,180,74,0.4)] sm:size-[340px]">
+          {/* orb image in circular frame — mouse-parallaxed */}
+          <motion.div
+            style={reduced ? undefined : { x: orbX, y: orbY }}
+            className="relative size-[280px] overflow-hidden rounded-full border border-gold/20 shadow-[0_0_80px_-20px_rgba(232,180,74,0.4)] sm:size-[340px]"
+          >
             <Image
               src="/radar-orb.png"
               alt="Wakeel radar — scanning your operation"
@@ -169,7 +215,7 @@ export function Hero() {
               }}
             />
             <span aria-hidden className="absolute left-1/2 top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold shadow-[0_0_12px_rgba(232,180,74,0.9)]" />
-          </div>
+          </motion.div>
 
           {/* floating status chips */}
           {CHIPS_META.map((chip) => (
@@ -204,7 +250,7 @@ export function Hero() {
           {STATS_META.map((stat, i) => (
             <div
               key={stat.key}
-              className={`flex flex-col gap-1 px-5 py-6 sm:px-8 ${
+              className={`group flex flex-col gap-1 px-5 py-6 transition-colors sm:px-8 ${
                 i > 0 ? "border-s border-border/70" : ""
               } ${i >= 2 ? "border-t border-border/70 md:border-t-0" : ""}`}
             >
@@ -212,9 +258,14 @@ export function Hero() {
                 value={stat.value}
                 decimals={stat.decimals}
                 suffix={stat.suffix}
-                className="font-display text-2xl font-bold text-foreground sm:text-3xl"
+                className="font-display text-2xl font-bold text-foreground transition-colors group-hover:text-gold sm:text-3xl"
               />
               <MonoLabel>{t.hero[stat.key]}</MonoLabel>
+              {/* stat underline draws in on hover */}
+              <span
+                aria-hidden
+                className="mt-1 h-px max-w-10 origin-left bg-gradient-to-r from-gold to-transparent transition-transform duration-500 group-hover:max-w-full rtl:origin-right"
+              />
             </div>
           ))}
         </div>
