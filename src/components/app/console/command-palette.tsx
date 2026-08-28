@@ -23,9 +23,9 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
-import { systemIcon } from "@/components/app/bits";
+import { ActivityTitle, systemIcon } from "@/components/app/bits";
 import { getActivity, getSystems } from "@/lib/api-client";
-import { useT } from "@/lib/i18n";
+import { localizeActivity, useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 import type { ConsoleTab } from "@/lib/api-client";
 
@@ -35,6 +35,7 @@ import type { ConsoleTab } from "@/lib/api-client";
  */
 export function CommandPalette() {
   const t = useT();
+  const lang = useWakeel((s) => s.lang);
   const open = useWakeel((s) => s.paletteOpen);
   const setOpen = useWakeel((s) => s.setPaletteOpen);
   const userId = useWakeel((s) => s.userId);
@@ -193,7 +194,9 @@ export function CommandPalette() {
           <>
             <CommandSeparator className="bg-border" />
             <CommandGroup heading={t.palette.recent}>
-              {activities.map((a) => (
+              {activities.map((a) => {
+                const loc = localizeActivity(a, lang);
+                return (
                 <CommandItem
                   key={a.id}
                   value={`${a.type} ${a.title}`}
@@ -201,14 +204,16 @@ export function CommandPalette() {
                   className="gap-2.5 font-mono text-[12px]"
                 >
                   <Activity className="size-4 shrink-0 text-muted-foreground" />
-                  <span dir="auto" className="truncate text-muted-foreground">
-                    {a.title}
-                  </span>
+                  <ActivityTitle
+                    parts={loc.titleParts}
+                    className="truncate text-muted-foreground"
+                  />
                   <span className="ms-auto shrink-0 rounded-sm border border-border px-1 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground/60">
                     {a.type}
                   </span>
                 </CommandItem>
-              ))}
+                );
+              })}
             </CommandGroup>
           </>
         )}

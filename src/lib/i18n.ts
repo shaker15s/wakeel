@@ -179,6 +179,10 @@ export const en = {
     fallbackWorkspace: "WAKEEL",
     fallbackName: "operator",
     openPalette: "Open command palette",
+    exportOp: "Export workspace",
+    exportTitle: "Workspace exported",
+    exportDesc: (s: number, r: number) => `${s} system${s === 1 ? "" : "s"} · ${r} record${r === 1 ? "" : "s"} · JSON saved to your machine.`,
+    exportErr: "Export failed",
   },
 
   side: {
@@ -263,6 +267,8 @@ export const en = {
     emptyC: "Nothing in your workspace yet. Run a discovery sweep to adopt existing systems, or forge a brand-new one from a sentence.",
     runDiscovery: "Run discovery",
     forgeSystem: "Forge system",
+    kbdNav: "navigate",
+    kbdOpen: "open",
     records: (n: number) => `${n} RECORD${n === 1 ? "" : "S"}`,
     capabilities: (n: number) =>
       `${n} CAPABILIT${n === 1 ? "Y" : "IES"}`,
@@ -309,6 +315,16 @@ export const en = {
     sub: "Every action Wakeel takes on your behalf — timestamped, nothing hidden.",
     live: "LIVE · REFRESH 15S",
     all: "ALL",
+    filters: {
+      SCAN: "SCAN",
+      FORGE: "FORGE",
+      RECORD: "RECORD",
+      AUTOMATION: "AUTOMATION",
+      CHAT: "CHAT",
+      STATUS: "STATUS",
+      DELETE: "DELETE",
+      SHARE: "SHARE",
+    },
     emptyT: "LEDGER EMPTY",
     emptyC: "Once you run a scan, forge a system or chat with Wakeel, every action lands here.",
     noEventsT: (t: string) => `NO ${t} EVENTS`,
@@ -705,6 +721,10 @@ export const ar: Dict = {
     fallbackWorkspace: "واكيل",
     fallbackName: "مشغّل",
     openPalette: "افتح لوحة الأوامر",
+    exportOp: "تصدير مساحة العمل",
+    exportTitle: "صُدّرت مساحة العمل",
+    exportDesc: (s: number, r: number) => `${s} ${s === 1 ? "نظام" : "أنظمة"} · ${r} ${r === 1 ? "سجل" : "سجلات"} · حُفظ ملف JSON على جهازك.`,
+    exportErr: "فشل التصدير",
   },
 
   side: {
@@ -791,6 +811,8 @@ export const ar: Dict = {
     emptyC: "لا شيء في مساحة عملك بعد. شغّل مسح استكشاف لتبنّي أنظمة قائمة، أو ابنِ نظاماً جديداً من جملة واحدة.",
     runDiscovery: "استكشاف",
     forgeSystem: "بناء نظام",
+    kbdNav: "تنقّل",
+    kbdOpen: "فتح",
     records: (n: number) => `${n} ${n === 1 ? "سجل" : "سجلات"}`,
     capabilities: (n: number) => `${n} قدرات`,
     archived: "مؤرشف",
@@ -836,6 +858,16 @@ export const ar: Dict = {
     sub: "كل إجراء يتخذه واكيل نيابةً عنك — بطابع زمني، بلا شيء مخفي.",
     live: "حي · تحديث كل 15ث",
     all: "الكل",
+    filters: {
+      SCAN: "مسح",
+      FORGE: "بناء",
+      RECORD: "سجل",
+      AUTOMATION: "أتمتة",
+      CHAT: "محادثة",
+      STATUS: "حالة",
+      DELETE: "حذف",
+      SHARE: "مشاركة",
+    },
     emptyT: "السجل فارغ",
     emptyC: "بمجرد أن تشغّل مسحاً أو تبني نظاماً أو تحاور واكيل، كل إجراء سيهبط هنا.",
     noEventsT: (t: string) => `لا أحداث ${t}`,
@@ -1089,4 +1121,83 @@ export function useT(): Dict {
 
 export function dictFor(lang: Lang): Dict {
   return DICTS[lang];
+}
+
+/* --------------------------- activity localizer ---------------------------- */
+
+/** A rendered title is a sequence of plain segments and isolated (bdi) names. */
+export type ActivitySegment = string | { bdi: string };
+
+export interface LocalizedActivity {
+  titleParts: ActivitySegment[];
+  detail: string | null;
+}
+
+/**
+ * Server-side activity titles are stable English templates (see the
+ * `activity.create` calls in the API routes). For Arabic we reverse them into
+ * localized templates at render time — no schema change, and any unmatched
+ * title (LLM-generated or future types) falls back to the raw string.
+ * Latin names are returned as {bdi} segments so the renderer can isolate them.
+ */
+export function localizeActivity(
+  a: { type: string; title: string; detail?: string | null },
+  lang: Lang
+): LocalizedActivity {
+  if (lang !== "ar") return { titleParts: [a.title], detail: a.detail ?? null };
+
+  const t = a.title;
+  let parts: ActivitySegment[] | null = null;
+  let detail: string | null = a.detail ?? null;
+
+  // order matters: specific patterns before generic prefixes
+  let m: RegExpMatchArray | null;
+  if ((m = /^Bulk deleted (\d+) records? from (.+)$/.exec(t))) {
+    const n = Number(m[1]);
+    parts = [`حُذف ${n} ${n === 1 ? "سجل" : "سجلات"} من`, { bdi: m[2] }];
+  } else if ((m = /^Discovered (\d+) systems? for (.+)$/.exec(t))) {
+    const n = Number(m[1]);
+    parts = [`رُصد ${n} ${n === 1 ? "نظام" : "أنظمة"} لـ`, { bdi: m[2] }];
+  } else if ((m = /^Automation failed on (.+)$/.exec(t))) {
+    parts = [`فشلت الأتمتة على`, { bdi: m[1] }];
+  } else if ((m = /^Automation ran on (.+)$/.exec(t))) {
+    parts = [`شغّلت الأتمتة على`, { bdi: m[1] }];
+  } else if ((m = /^Share link revoked for "(.+)"$/.exec(t))) {
+    parts = [`سُحب رابط مشاركة "`, { bdi: m[1] }, `"`];
+  } else if ((m = /^Shared "(.+)"$/.exec(t))) {
+    parts = [`تمت مشاركة "`, { bdi: m[1] }, `"`];
+  } else if ((m = /^New record added to (.+)$/.exec(t))) {
+    parts = [`سجل جديد في`, { bdi: m[1] }];
+  } else if ((m = /^Moved (.+) to DRAFT$/.exec(t))) {
+    parts = [`نُقل`, { bdi: m[1] }, ` إلى DRAFT`];
+  } else if ((m = /^Wakeel handled a request for (.+)$/.exec(t))) {
+    parts = [`وكيل عالج طلباً لـ`, { bdi: m[1] }];
+  } else if ((m = /^Archived (.+)$/.exec(t))) {
+    parts = [`أُرشف`, { bdi: m[1] }];
+  } else if ((m = /^Restored (.+)$/.exec(t))) {
+    parts = [`أُعيد تنشيط`, { bdi: m[1] }];
+  } else if ((m = /^Deleted (.+)$/.exec(t))) {
+    parts = [`حُذف`, { bdi: m[1] }];
+  } else if ((m = /^Forged (.+)$/.exec(t))) {
+    parts = [`بُني`, { bdi: m[1] }];
+  } else if ((m = /^Updated (.+)$/.exec(t))) {
+    parts = [`حُدّث`, { bdi: m[1] }];
+  }
+
+  if (detail) {
+    let dm: RegExpMatchArray | null;
+    if ((dm = /^Fields: (.+)$/.exec(detail))) {
+      detail = `الحقول: ${dm[1].split(", ").join("، ")}`;
+    } else if (/^Removed system and all of its records$/.test(detail)) {
+      detail = "أُزيل النظام وكل سجلاته";
+    } else if (/^Selection removed via records console$/.test(detail)) {
+      detail = "أُزيل التحديد من كونسول السجلات";
+    } else if ((dm = /^Read-only link issued · token (.+)$/.exec(detail))) {
+      detail = `تم إصدار رابط قراءة فقط · الرمز ${dm[1]}`;
+    } else if ((dm = /^Token (.+?)… can no longer be opened\.$/.exec(detail))) {
+      detail = `الرمز ${dm[1]}… لم يعد يفتح.`;
+    }
+  }
+
+  return { titleParts: parts ?? [t], detail };
 }

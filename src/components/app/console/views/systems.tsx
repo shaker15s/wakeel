@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Archive, Boxes, Radar } from "lucide-react";
@@ -17,11 +18,22 @@ import { MonoLabel } from "@/components/app/motion-bits";
 import { getSystems, parseCapabilities, recordCount } from "@/lib/api-client";
 import { recCount, useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
+import { cn } from "@/lib/utils";
 
 const GRID_ART = `  ┌───┐ ┌───┐ ┌───┐
   │ ▦ │ │ ▦ │ │ ▦ │
   └───┘ └───┘ └───┘
   NO SYSTEMS MAPPED`;
+
+/* --------------------------- keyboard hint chip ---------------------------- */
+
+function Kbd({ children }: { children: string }) {
+  return (
+    <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[3px] border border-border bg-secondary px-1 font-mono text-[9px] font-medium uppercase text-foreground/80 shadow-[inset_0_-1px_0_0_rgba(245,239,228,0.06)]">
+      {children}
+    </kbd>
+  );
+}
 
 export function SystemsView() {
   const t = useT();
@@ -39,6 +51,45 @@ export function SystemsView() {
 
   const systems = data?.systems ?? [];
   const activeCount = systems.filter((s) => s.status === "ACTIVE").length;
+
+  /** keyboard cursor over the registry grid (same model as the records table) */
+  const [cursor, setCursor] = useState<number | null>(null);
+  const cardRefs = useRef<Map<number, HTMLElement>>(new Map());
+
+  // keep the cursor valid as systems come and go
+  const [prevLen, setPrevLen] = useState(systems.length);
+  if (prevLen !== systems.length) {
+    setPrevLen(systems.length);
+    if (cursor !== null) {
+      setCursor(systems.length === 0 ? null : Math.min(cursor, systems.length - 1));
+    }
+  }
+
+  // follow the cursor with the viewport
+  useEffect(() => {
+    if (cursor === null) return;
+    cardRefs.current.get(cursor)?.scrollIntoView({ block: "nearest" });
+  }, [cursor]);
+
+  const onGridKeyDown = (e: React.KeyboardEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("input, textarea, select, [role='combobox'], [role='listbox'], [role='option'], [role='menu']"))
+      return;
+    if (systems.length === 0) return;
+    const key = e.key;
+    if (key === "j" || key === "J" || key === "ArrowDown" || key === "ArrowRight") {
+      e.preventDefault();
+      setCursor((c) => (c === null ? 0 : Math.min(c + 1, systems.length - 1)));
+    } else if (key === "k" || key === "K" || key === "ArrowUp" || key === "ArrowLeft") {
+      e.preventDefault();
+      setCursor((c) => (c === null ? 0 : Math.max(c - 1, 0)));
+    } else if ((key === "Enter" || key === "o" || key === "O") && cursor !== null) {
+      e.preventDefault();
+      openSystemDetail(systems[cursor].id);
+    } else if (key === "Escape") {
+      setCursor(null);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,30 +136,47 @@ export function SystemsView() {
           </Button>
         </EmptyState>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {systems.map((system, i) => {
-            const Icon = systemIcon(system.icon);
-            const count = recordCount(system);
-            const capabilities = parseCapabilities(system.capabilities);
-            const isArchived = system.status === "ARCHIVED";
-            return (
-              <motion.button
-                key={system.id}
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{
-                  duration: 0.4,
-                  delay: (i % 6) * 0.05,
-                  ease: [0.22, 1, 0.36, 1],
-                }}
-                whileHover={{ y: -4 }}
-                onClick={() => openSystemDetail(system.id)}
-                className={`group flex flex-col gap-3 rounded-lg border bg-card p-4 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 ${
-                  isArchived
-                    ? "border-border/60 opacity-60 hover:border-border"
-                    : "border-border hover:border-gold/40"
-                }`}
-              >
+        <>
+          <div
+            tabIndex={0}
+            onKeyDown={onGridKeyDown}
+            aria-label={t.sys.title}
+            className="focus-visible:outline-none"
+          >
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {systems.map((system, i) => {
+                const Icon = systemIcon(system.icon);
+                const count = recordCount(system);
+                const capabilities = parseCapabilities(system.capabilities);
+                const isArchived = system.status === "ARCHIVED";
+                const isCursor = cursor === i;
+                return (
+                  <motion.button
+                    key={system.id}
+                    ref={(el) => {
+                      if (el) cardRefs.current.set(i, el);
+                      else cardRefs.current.delete(i);
+                    }}
+                    initial={{ opacity: 0, y: 18 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      duration: 0.4,
+                      delay: (i % 6) * 0.05,
+                      ease: [0.22, 1, 0.36, 1],
+                    }}
+                    whileHover={{ y: -4 }}
+                    onClick={() => openSystemDetail(system.id)}
+                    data-cursor={isCursor || undefined}
+                    className={cn(
+                      "group flex flex-col gap-3 rounded-lg border bg-card p-4 text-start transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+                      isArchived
+                        ? "border-border/60 opacity-60 hover:border-border"
+                        : "border-border hover:border-gold/40",
+                      // gold rail marks the keyboard cursor
+                      isCursor &&
+                        "border-gold/50 shadow-[inset_2px_0_0_0_#E8B44A] rtl:shadow-[inset_-2px_0_0_0_#E8B44A]"
+                    )}
+                  >
                 <div className="flex items-start gap-3">
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-sm border border-border bg-secondary text-muted-foreground transition-colors group-hover:border-gold/40 group-hover:text-gold">
                     <Icon className="size-5" />
@@ -154,9 +222,27 @@ export function SystemsView() {
                   </div>
                 </div>
               </motion.button>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+          </div>
+          {/* keyboard hints — same power-user model as the records table */}
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 px-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60"
+            aria-hidden
+          >
+            <span className="flex items-center gap-1">
+              <Kbd>J</Kbd>
+              <Kbd>K</Kbd> {t.sys.kbdNav}
+            </span>
+            <span className="flex items-center gap-1">
+              <Kbd>↵</Kbd> {t.sys.kbdOpen}
+            </span>
+            <span className="flex items-center gap-1">
+              <Kbd>Esc</Kbd> {t.recs.kbdClear}
+            </span>
+          </div>
+        </>
       )}
     </div>
   );

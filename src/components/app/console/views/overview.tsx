@@ -11,13 +11,14 @@ import {
   HealthBar,
   OriginBadge,
   SparkBars,
+  ActivityTitle,
   systemIcon,
   timeAgo,
   TypeChip,
 } from "@/components/app/bits";
 import { CountUp, MonoLabel } from "@/components/app/motion-bits";
 import { getActivity, getSystems, getUser, recordCount } from "@/lib/api-client";
-import { recCount, useT } from "@/lib/i18n";
+import { localizeActivity, recCount, useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 
 const RADAR_ART = `   · · · · · · ·
@@ -247,20 +248,24 @@ export function OverviewView() {
               </p>
             ) : (
               <ul className="flex flex-col">
-                {activities.slice(0, 8).map((a) => (
+                {activities.slice(0, 8).map((a) => {
+                  const loc = localizeActivity(a, lang);
+                  return (
                   <li
                     key={a.id}
                     className="flex items-center gap-2.5 border-b border-border/60 px-2 py-2.5 last:border-0"
                   >
                     <TypeChip type={a.type} />
-                    <span dir="auto" className="min-w-0 flex-1 truncate text-[13px] text-foreground/90">
-                      {a.title}
-                    </span>
+                    <ActivityTitle
+                      parts={loc.titleParts}
+                      className="min-w-0 flex-1 truncate text-[13px] text-foreground/90"
+                    />
                     <span className="shrink-0 font-mono text-[10px] text-muted-foreground" dir="ltr">
                       {timeAgo(a.createdAt, lang)}
                     </span>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </div>

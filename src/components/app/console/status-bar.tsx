@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, LogOut, Search } from "lucide-react";
+import { Bot, Download, LogOut, Search } from "lucide-react";
 import { toast } from "sonner";
 import { WakeelMark } from "@/components/app/logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -17,7 +17,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { initialsOf } from "@/components/app/bits";
 import { LangToggle } from "@/components/app/lang-toggle";
-import { getSystems, getUser } from "@/lib/api-client";
+import {
+  getSystems,
+  getSystemDetail,
+  getUser,
+  parseBlueprint,
+  parseCapabilities,
+  parseRecordData,
+} from "@/lib/api-client";
 import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -81,6 +88,75 @@ export function StatusBar() {
     toast(t.sb.switchedTitle, {
       description: t.sb.switchedDesc,
     });
+  };
+
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    if (!userId || exporting) return;
+    setExporting(true);
+    try {
+      // fresh fetches (not the query cache) so the export is always complete
+      const [userData, systemsData] = await Promise.all([
+        getUser(userId),
+        getSystems(userId),
+      ]);
+      const systems = systemsData.systems;
+      const details = await Promise.all(
+        systems.map((s) => getSystemDetail(s.id))
+      );
+      const payload = {
+        format: "wakeel.workspace/v1" as const,
+        exportedAt: new Date().toISOString(),
+        operator: userData.user,
+        systems: details.map(({ system, records }) => ({
+          name: system.name,
+          description: system.description,
+          category: system.category,
+          icon: system.icon,
+          origin: system.origin,
+          status: system.status,
+          health: system.health,
+          confidence: system.confidence,
+          source: system.source,
+          blueprint: parseBlueprint(system.blueprint),
+          capabilities: parseCapabilities(system.capabilities),
+          createdAt: system.createdAt,
+          records: records.map((r) => ({
+            data: parseRecordData(r.data),
+            createdAt: r.createdAt,
+          })),
+        })),
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const ws = (userData.user.workspace || "workspace")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      const stamp = new Date()
+        .toISOString()
+        .slice(0, 16)
+        .replace(/[T:]/g, "-");
+      a.href = url;
+      a.download = `wakeel-${ws}-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      const recordTotal = details.reduce((n, d) => n + d.records.length, 0);
+      toast.success(t.sb.exportTitle, {
+        description: t.sb.exportDesc(systems.length, recordTotal),
+      });
+    } catch (err) {
+      toast.error(t.sb.exportErr, {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -158,6 +234,13 @@ export function StatusBar() {
               {user ? `${user.name} · ${user.workspace}` : "OPERATOR"}
             </DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-border" />
+            <DropdownMenuItem
+              onClick={handleExport}
+              disabled={exporting || systemCount === 0}
+              className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-secondary focus:text-gold"
+            >
+              <Download className="size-3.5" /> {t.sb.exportOp}
+            </DropdownMenuItem>
             <DropdownMenuItem
               onClick={handleSwitch}
               className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-secondary focus:text-gold"

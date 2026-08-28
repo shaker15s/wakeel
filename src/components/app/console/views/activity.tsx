@@ -5,11 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { ScrollText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EmptyState, StatusDot, TypeChip, timeAgo } from "@/components/app/bits";
+import { EmptyState, ActivityTitle, StatusDot, TypeChip, timeAgo } from "@/components/app/bits";
 import { MonoLabel } from "@/components/app/motion-bits";
 import { getActivity } from "@/lib/api-client";
 import type { ActivityType } from "@/lib/api-client";
-import { useT } from "@/lib/i18n";
+import { localizeActivity, useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +18,7 @@ const LEDGER_ART = `  ┌──────────────────�
   │  no actions logged   │
   └──────────────────────┘`;
 
-const FILTER_KEYS = ["ALL", "SCAN", "FORGE", "RECORD", "AUTOMATION", "CHAT", "STATUS", "DELETE"] as const;
+const FILTER_KEYS = ["ALL", "SCAN", "FORGE", "RECORD", "AUTOMATION", "CHAT", "STATUS", "DELETE", "SHARE"] as const;
 
 export function ActivityView() {
   const t = useT();
@@ -45,7 +45,7 @@ export function ActivityView() {
   }, [activities]);
 
   const filterLabel = (f: (typeof FILTER_KEYS)[number]) =>
-    f === "ALL" ? t.act.all : f;
+    f === "ALL" ? t.act.all : (t.act.filters as Record<string, string>)[f] ?? f;
 
   return (
     <div className="flex flex-col gap-6">
@@ -104,7 +104,9 @@ export function ActivityView() {
         </EmptyState>
       ) : (
         <div className="overflow-hidden rounded-lg border border-border bg-card">
-          {filtered.map((activity, i) => (
+          {filtered.map((activity, i) => {
+            const loc = localizeActivity(activity, lang);
+            return (
             <motion.div
               key={activity.id}
               initial={{ opacity: 0, y: 10 }}
@@ -124,12 +126,13 @@ export function ActivityView() {
               </span>
               <TypeChip type={activity.type} />
               <div className="min-w-0 flex-1">
-                <p dir="auto" className="truncate text-[13px] text-foreground">
-                  {activity.title}
-                </p>
-                {activity.detail && (
+                <ActivityTitle
+                  parts={loc.titleParts}
+                  className="block truncate text-[13px] text-foreground"
+                />
+                {loc.detail && (
                   <p dir="auto" className="truncate font-mono text-[11px] text-muted-foreground/70">
-                    {activity.detail}
+                    {loc.detail}
                   </p>
                 )}
               </div>
@@ -138,7 +141,8 @@ export function ActivityView() {
                 {timeAgo(activity.createdAt, lang)}
               </span>
             </motion.div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

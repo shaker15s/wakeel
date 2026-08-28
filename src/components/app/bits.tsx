@@ -365,6 +365,30 @@ export function timeAgo(iso: string, lang: Lang = "en"): string {
   }
 }
 
+/**
+ * Renders localized activity title segments. {bdi} segments are isolated so
+ * Latin system/operator names keep correct direction inside Arabic sentences.
+ */
+export function ActivityTitle({
+  parts,
+  className,
+}: {
+  parts: (string | { bdi: string })[];
+  className?: string;
+}) {
+  return (
+    <span className={className} dir="auto">
+      {parts.map((p, i) =>
+        typeof p === "string" ? (
+          <span key={i}>{p}</span>
+        ) : (
+          <bdi key={i}>{p.bdi}</bdi>
+        )
+      )}
+    </span>
+  );
+}
+
 export function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "؟";
