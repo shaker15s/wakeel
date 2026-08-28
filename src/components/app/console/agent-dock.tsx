@@ -172,7 +172,7 @@ function DockBody() {
   }, [insights, t]);
 
   const mutation = useMutation({
-    mutationFn: (message: string) => sendChat(userId!, message),
+    mutationFn: (message: string) => sendChat(userId!, message, lang),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["chat", userId] });
       queryClient.invalidateQueries({ queryKey: ["activity", userId] });

@@ -204,6 +204,57 @@ export const en = {
     importInvalid: "That file is not a Wakeel workspace export (wakeel.workspace/v1).",
     importErr: "Import failed",
     workspaceSection: "WORKSPACE DATA",
+    replayTour: "Replay guided tour",
+  },
+
+  tour: {
+    aria: "Guided tour",
+    skip: "Skip tour",
+    back: "Back",
+    next: "Next",
+    finish: "Finish",
+    stepOf: (i: number, n: number) =>
+      `STOP ${String(i).padStart(2, "0")} / ${String(n).padStart(2, "0")}`,
+    dots: "Tour progress",
+    doneTitle: "Tour complete",
+    doneDesc: "Wakeel is on duty. Press ⌘K anytime to find your way around.",
+    steps: [
+      {
+        kicker: "OVERVIEW",
+        title: "Your morning dashboard",
+        body: "KPIs, your latest systems and the freshest ledger lines — with one-click actions to run a discovery scan or forge a new system.",
+      },
+      {
+        kicker: "DISCOVERY",
+        title: "Map what you already run",
+        body: "Point Wakeel at your company URL or describe your stack. It researches the live web and maps every system you already use — CRM, ERP, storage, finance.",
+      },
+      {
+        kicker: "SYSTEMS",
+        title: "Everything lives here",
+        body: "Every discovered or forged system. Open one for records, automations, analytics, CSV import and read-only share links.",
+      },
+      {
+        kicker: "FORGE",
+        title: "Missing a tool? Say the word",
+        body: "Describe any system in one sentence — “inventory for my pharmacy” — and Wakeel forges a real working mini-app with typed fields and views.",
+      },
+      {
+        kicker: "ACTIVITY",
+        title: "The ops ledger",
+        body: "Every scan, record, automation and chat is logged as an audit trail. Your employee is always accountable.",
+      },
+      {
+        kicker: "AGENT DOCK",
+        title: "Your employee, on call",
+        body: "Ask about your systems, records or next automations. Wakeel answers with your live workspace context — suggested prompts included.",
+      },
+      {
+        kicker: "SHORTCUTS",
+        title: "Move at operator speed",
+        body: "⌘K opens the command palette. Keys 1–5 jump straight to a view. That’s the whole tour — Wakeel is on duty.",
+      },
+    ],
   },
 
   impv: {
@@ -639,6 +690,7 @@ export const en = {
     vSystems: "Systems registry",
     vForge: "Forge a system",
     vActivity: "Activity ledger",
+    tour: "Replay the guided tour",
   },
 
   lang: {
@@ -840,6 +892,57 @@ export const ar: Dict = {
     importInvalid: "هذا الملف ليس ملف تصدير مساحة عمل واكيل (wakeel.workspace/v1).",
     importErr: "فشل الاستيراد",
     workspaceSection: "بيانات المساحة",
+    replayTour: "إعادة الجولة الإرشادية",
+  },
+
+  tour: {
+    aria: "الجولة الإرشادية",
+    skip: "تخطَّ الجولة",
+    back: "السابق",
+    next: "التالي",
+    finish: "إنهاء",
+    stepOf: (i: number, n: number) =>
+      `محطة ${String(i).padStart(2, "0")} / ${String(n).padStart(2, "0")}`,
+    dots: "تقدّم الجولة",
+    doneTitle: "اكتملت الجولة",
+    doneDesc: "الوكيل في الخدمة. اضغط ⌘K في أي وقت لتجد طريقك.",
+    steps: [
+      {
+        kicker: "نظرة عامة",
+        title: "لوحتك الصباحية",
+        body: "المؤشرات، أحدث أنظمتك، وأحدث بنود السجل — مع أزرار فورية لتشغيل فحص استكشاف أو بناء نظام جديد.",
+      },
+      {
+        kicker: "الاستكشاف",
+        title: "ارسم خريطة ما تعمل به فعلًا",
+        body: "وجّه وكيلك إلى رابط شركتك أو صِف منظومتك؛ يبحث في الويب الحي ويرصد كل نظام تستخدمه بالفعل — إدارة علاقات، تخطيط موارد، تخزين، مالية.",
+      },
+      {
+        kicker: "الأنظمة",
+        title: "كل شيء يسكن هنا",
+        body: "كل نظام مكتشَف أو مبنيّ. افتح أحدها لترى السجلات والأتمتة والتحليلات واستيراد CSV وروابط المشاركة للقراءة فقط.",
+      },
+      {
+        kicker: "الورشة",
+        title: "ينقصك أداة؟ اطلبها بجملة",
+        body: "صِف أي نظام بجملة واحدة — «نظام مخزون لصيدليتي» — وسيبني وكيلك تطبيقًا مصغّرًا حقيقيًا يعمل بحقول محددة النوع وواجهات جاهزة.",
+      },
+      {
+        kicker: "النشاط",
+        title: "سجلّ العمليات",
+        body: "كل فحص وسجل وأتمتة ومحادثة موثّقة كسجل تدقيق. موظفك مسؤول أمامك دائمًا.",
+      },
+      {
+        kicker: "رصيف الوكيل",
+        title: "موظفك في الخدمة",
+        body: "اسأل عن أنظمتك أو سجلاتك أو الأتمتة القادمة؛ يجيب وكيلك بسياق مساحة عملك الحي — مع اقتراحات جاهزة للبدء.",
+      },
+      {
+        kicker: "الاختصارات",
+        title: "تحرك بسرعة المشغّلين",
+        body: "⌘K يفتح لوحة الأوامر، ومفاتيح 1–5 تنقلك مباشرة بين الشاشات. هذا كل شيء — الوكيل في الخدمة.",
+      },
+    ],
   },
 
   impv: {
@@ -1276,6 +1379,7 @@ export const ar: Dict = {
     vSystems: "سجل الأنظمة",
     vForge: "ابنِ نظاماً",
     vActivity: "دفتر النشاط",
+    tour: "أعد الجولة الإرشادية",
   },
 
   lang: {

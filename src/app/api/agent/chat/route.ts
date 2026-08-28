@@ -6,6 +6,8 @@ import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
 const chatSchema = z.object({
   userId: z.string().trim().min(1, 'userId is required'),
   message: z.string().trim().min(1, 'message is required').max(2000),
+  /** operator's UI language — the tiebreaker when the message language is ambiguous */
+  lang: z.enum(['en', 'ar']).optional(),
 })
 
 const AGENT_FALLBACK_REPLY =
@@ -36,6 +38,7 @@ export async function POST(req: Request) {
       return jsonError(400, 'Invalid input: userId and message are required (message max 2000 chars).')
     }
     const { userId, message } = parsed.data
+    const sessionLang = parsed.data.lang === 'ar' ? 'ar' : 'en'
 
     const user = await db.user.findUnique({ where: { id: userId } })
     if (!user) return jsonError(404, 'User not found.')
@@ -78,7 +81,8 @@ export async function POST(req: Request) {
 
     const systemPrompt = [
       `You are Wakeel (وكيل), a dedicated AI employee working for ${user.name} in workspace ${user.workspace}. You are professional, proactive, warm, slightly formal, obsessed with operations. You refer to the user's actual systems by name. Keep replies under 120 words. If asked to do something you cannot do with current tools, say exactly what you would need and suggest which system handles it.`,
-      `LANGUAGE RULE: always reply in the SAME language the operator's latest message is written in. If they write in Arabic, reply in natural Modern Standard Arabic (system/product names may stay in Latin script). If they write in English, reply in English.`,
+      `GROUNDING RULE: answer from the LIVE WORKSPACE CONTEXT below whenever it is relevant. If the context does not contain the answer, say plainly that you don't have that information yet and suggest a concrete next step (run a discovery, forge a system, open a record). Never invent system names, numbers or records that are not in the context.`,
+      `LANGUAGE RULE (hard requirement, violating it is a defect): reply in the SAME language AND script as the operator's latest message. Arabic message → natural Modern Standard Arabic (system/product names may stay in Latin script). English message → English. If the message is ambiguous or mixed, fall back to the SESSION LANGUAGE: ${sessionLang.toUpperCase()}. NEVER reply in a different script than the operator's message.`,
       '',
       '--- LIVE WORKSPACE CONTEXT ---',
       `Systems you manage for ${user.name}:`,

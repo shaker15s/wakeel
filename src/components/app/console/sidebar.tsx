@@ -61,6 +61,7 @@ export function Sidebar({ className }: { className?: string }) {
           <button
             key={item.id}
             onClick={() => setConsoleTab(item.id)}
+            data-tour={`nav-${item.id}`}
             aria-current={active ? "page" : undefined}
             className={cn(
               "group relative flex h-11 min-h-11 w-full items-center gap-3 rounded-sm px-3.5 transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
@@ -122,6 +123,7 @@ export function MobileNav({ className }: { className?: string }) {
           <button
             key={item.id}
             onClick={() => setConsoleTab(item.id)}
+            data-tour={`mnav-${item.id}`}
             aria-current={active ? "page" : undefined}
             className={cn(
               "relative flex h-11 min-h-11 shrink-0 items-center gap-2 px-4 font-mono text-[11px] uppercase tracking-[0.12em] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60",

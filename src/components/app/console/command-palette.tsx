@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   Boxes,
+  Compass,
   CornerDownLeft,
   Database,
   Hammer,
@@ -42,6 +43,7 @@ export function CommandPalette() {
   const setConsoleTab = useWakeel((s) => s.setConsoleTab);
   const openSystemDetail = useWakeel((s) => s.openSystemDetail);
   const toggleAgentDock = useWakeel((s) => s.toggleAgentDock);
+  const setTourOpen = useWakeel((s) => s.setTourOpen);
 
   // global hotkey
   useEffect(() => {
@@ -141,6 +143,15 @@ export function CommandPalette() {
           >
             <ScrollText className="size-4 text-muted-foreground" />
             {t.palette.vActivity}
+            <CornerDownLeft className="ms-auto size-3 text-muted-foreground/50" />
+          </CommandItem>
+          <CommandItem
+            value="tour guide help onboarding walkthrough replay"
+            onSelect={() => run(() => setTourOpen(true))}
+            className="gap-2.5 font-mono text-[12px]"
+          >
+            <Compass className="size-4 text-gold/70" />
+            {t.palette.tour}
             <CornerDownLeft className="ms-auto size-3 text-muted-foreground/50" />
           </CommandItem>
         </CommandGroup>

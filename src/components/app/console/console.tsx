@@ -11,6 +11,7 @@ import {
 import { SystemDetailDialog } from "@/components/app/console/system-detail-dialog";
 import { CommandPalette } from "@/components/app/console/command-palette";
 import { BootSequence } from "@/components/app/console/boot-sequence";
+import { GuidedTour } from "@/components/app/console/guided-tour";
 import { OverviewView } from "@/components/app/console/views/overview";
 import { DiscoveryView } from "@/components/app/console/views/discovery";
 import { SystemsView } from "@/components/app/console/views/systems";
@@ -122,6 +123,9 @@ export function Console() {
 
       {/* one-shot terminal boot overlay */}
       <BootSequence />
+
+      {/* first-use guided tour (auto for fresh operators, replayable) */}
+      <GuidedTour />
     </div>
   );
 }

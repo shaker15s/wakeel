@@ -66,6 +66,12 @@ export function OnboardingDialog() {
       setUserId(data.user.id); // persists to localStorage wakeel:user
       setView("console");
       setOpen(false);
+      // first-ever console entry → the guided tour greets the new operator
+      try {
+        window.localStorage.setItem("wakeel:tour:auto", "1");
+      } catch {
+        // storage unavailable — the tour stays replayable from the operator menu
+      }
       toast.success(t.onb.toastOk, {
         description: t.onb.toastOkDesc(data.user.name.split(" ")[0]),
       });

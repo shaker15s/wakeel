@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Download, LogOut, Search, Upload } from "lucide-react";
+import { Bot, Compass, Download, LogOut, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { WakeelMark } from "@/components/app/logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -62,6 +62,7 @@ export function StatusBar() {
   const agentDockOpen = useWakeel((s) => s.agentDockOpen);
   const toggleAgentDock = useWakeel((s) => s.toggleAgentDock);
   const setPaletteOpen = useWakeel((s) => s.setPaletteOpen);
+  const setTourOpen = useWakeel((s) => s.setTourOpen);
   const switchOperator = useWakeel((s) => s.switchOperator);
   const setUserId = useWakeel((s) => s.setUserId);
   const setConsoleTab = useWakeel((s) => s.setConsoleTab);
@@ -243,6 +244,7 @@ export function StatusBar() {
         <button
           onClick={() => setPaletteOpen(true)}
           aria-label={t.sb.openPalette}
+          data-tour="palette"
           className="hidden h-8 items-center gap-2 rounded-sm border border-border bg-transparent px-2.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-gold/40 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 md:flex"
         >
           <Search className="size-3.5" />
@@ -254,6 +256,7 @@ export function StatusBar() {
         <Button
           onClick={toggleAgentDock}
           aria-pressed={agentDockOpen}
+          data-tour="dock"
           className={cn(
             "h-8 gap-1.5 rounded-sm px-2.5 font-mono text-[10px] uppercase tracking-[0.14em]",
             agentDockOpen
@@ -322,6 +325,13 @@ export function StatusBar() {
                 if (file) void handleImportFile(file);
               }}
             />
+            <DropdownMenuSeparator className="bg-border" />
+            <DropdownMenuItem
+              onClick={() => setTourOpen(true)}
+              className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-secondary focus:text-gold"
+            >
+              <Compass className="size-3.5" /> {t.sb.replayTour}
+            </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem
               onClick={handleSwitch}

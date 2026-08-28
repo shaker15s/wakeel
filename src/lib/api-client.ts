@@ -413,10 +413,10 @@ export function getChat(userId: string) {
   );
 }
 
-export function sendChat(userId: string, message: string) {
+export function sendChat(userId: string, message: string, lang?: "en" | "ar") {
   return api<{ reply: string; messageId: string }>("/api/agent/chat", {
     method: "POST",
-    body: JSON.stringify({ userId, message }),
+    body: JSON.stringify({ userId, message, lang }),
   });
 }
 

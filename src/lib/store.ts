@@ -23,6 +23,8 @@ interface WakeelState {
   onboardingOpen: boolean;
   /** ⌘K command palette visibility */
   paletteOpen: boolean;
+  /** guided tour overlay visibility (auto-started for fresh operators, replayable) */
+  tourOpen: boolean;
   /** system to focus in the detail dialog (openable from any tab) */
   systemDetailId: string | null;
   /** latest discovery scan result so users can hop tabs without losing it */
@@ -41,6 +43,7 @@ interface WakeelState {
   toggleAgentDock: () => void;
   setOnboardingOpen: (open: boolean) => void;
   setPaletteOpen: (open: boolean) => void;
+  setTourOpen: (open: boolean) => void;
   openSystemDetail: (systemId: string) => void;
   closeSystemDetail: () => void;
   setLastScan: (scan: LastScanPayload | null) => void;
@@ -70,6 +73,7 @@ export const useWakeel = create<WakeelState>((set) => ({
   agentDockOpen: false,
   onboardingOpen: false,
   paletteOpen: false,
+  tourOpen: false,
   systemDetailId: null,
   lastScan: null,
   lastForge: null,
@@ -128,6 +132,7 @@ export const useWakeel = create<WakeelState>((set) => ({
     set((s) => ({ agentDockOpen: !s.agentDockOpen })),
   setOnboardingOpen: (onboardingOpen) => set({ onboardingOpen }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+  setTourOpen: (tourOpen) => set({ tourOpen }),
 
   openSystemDetail: (id) => set({ systemDetailId: id }),
   closeSystemDetail: () => set({ systemDetailId: null }),
@@ -150,6 +155,7 @@ export const useWakeel = create<WakeelState>((set) => ({
       agentDockOpen: false,
       onboardingOpen: false,
       paletteOpen: false,
+      tourOpen: false,
       systemDetailId: null,
       lastScan: null,
       lastForge: null,
