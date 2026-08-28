@@ -18,7 +18,7 @@ const LEDGER_ART = `  ┌──────────────────�
   │  no actions logged   │
   └──────────────────────┘`;
 
-const FILTER_KEYS = ["ALL", "SCAN", "FORGE", "RECORD", "AUTOMATION", "CHAT", "STATUS", "DELETE", "SHARE"] as const;
+const FILTER_KEYS = ["ALL", "SCAN", "FORGE", "RECORD", "AUTOMATION", "CHAT", "STATUS", "DELETE", "SHARE", "IMPORT"] as const;
 
 export function ActivityView() {
   const t = useT();

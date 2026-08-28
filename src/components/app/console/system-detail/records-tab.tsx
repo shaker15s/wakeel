@@ -10,6 +10,7 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  Sprout,
   Trash2,
   X,
 } from "lucide-react";
@@ -56,6 +57,7 @@ import {
   createRecord,
   deleteRecord,
   parseRecordData,
+  seedSystem,
   updateRecord,
 } from "@/lib/api-client";
 import type { BlueprintField, SystemRecordDTO } from "@/lib/api-client";
@@ -278,6 +280,19 @@ export function RecordsTab({
     },
     onError: (err: Error) =>
       toast.error(t.recs.toastAddErr, { description: err.message }),
+  });
+
+  /** LLM-grown sample rows — offered right from the empty state. */
+  const seed = useMutation({
+    mutationFn: () => seedSystem(systemId, 5),
+    onSuccess: (res) => {
+      invalidateAll();
+      toast.success(t.recs.seedOk, {
+        description: t.recs.seedOkDesc(res.seeded),
+      });
+    },
+    onError: (err: Error) =>
+      toast.error(t.recs.seedErr, { description: err.message }),
   });
 
   const removeRecord = useMutation({
@@ -588,7 +603,29 @@ export function RecordsTab({
           title={t.recs.noRecordsT}
           copy={t.recs.noRecordsC}
           className="py-8"
-        />
+        >
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={seed.isPending || isArchived || columns.length === 0}
+              onClick={() => seed.mutate()}
+              className="group relative h-9 overflow-hidden bg-gold font-mono text-[10px] uppercase tracking-[0.14em] text-[#0A0908] hover:bg-gold-pale"
+            >
+              {seed.isPending ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  {t.recs.seeding}
+                </>
+              ) : (
+                <>
+                  <Sprout className="size-3.5 transition-transform group-hover:-rotate-12" />
+                  {t.recs.seed}
+                </>
+              )}
+            </Button>
+          </div>
+        </EmptyState>
       ) : (
         <>
           <div

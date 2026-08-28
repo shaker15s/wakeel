@@ -23,7 +23,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { getChat, getSystems, sendChat } from "@/lib/api-client";
+import { getChat, getSystems, seedSystem, sendChat } from "@/lib/api-client";
 import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -51,6 +51,9 @@ interface Insight {
   id: string;
   icon: LucideIcon;
   text: string;
+  /** when set, clicking the chip EXECUTES the action instead of chatting */
+  action?: "seed";
+  systemId?: string;
 }
 
 function TypingIndicator() {
@@ -111,6 +114,8 @@ function DockBody() {
           id: "empty",
           icon: Inbox,
           text: t.dock.insightEmpty(empty.name),
+          action: "seed",
+          systemId: empty.id,
         });
 
       const stale = [...active].sort(
@@ -155,6 +160,30 @@ function DockBody() {
       toast.error(t.dock.toastErr, { description: err.message });
     },
   });
+
+  /** action chips run for real: seed grows LLM sample rows on the spot */
+  const seedMutation = useMutation({
+    mutationFn: (systemId: string) => seedSystem(systemId, 5),
+    onSuccess: async (res, systemId) => {
+      await queryClient.invalidateQueries({ queryKey: ["systems", userId] });
+      queryClient.invalidateQueries({ queryKey: ["records", systemId] });
+      queryClient.invalidateQueries({ queryKey: ["activity", userId] });
+      queryClient.invalidateQueries({ queryKey: ["user", userId] });
+      toast.success(t.recs.seedOk, {
+        description: t.recs.seedOkDesc(res.seeded),
+      });
+    },
+    onError: (err: Error) =>
+      toast.error(t.recs.seedErr, { description: err.message }),
+  });
+
+  const runChip = (chip: Insight) => {
+    if (chip.action === "seed" && chip.systemId) {
+      if (!seedMutation.isPending) seedMutation.mutate(chip.systemId);
+      return;
+    }
+    send(chip.text);
+  };
 
   const send = (text: string) => {
     const trimmed = text.trim();
@@ -213,10 +242,20 @@ function DockBody() {
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.08 * i, duration: 0.3 }}
-                  onClick={() => send(s.text)}
-                  className="flex items-center gap-2 rounded-sm border border-gold/25 bg-gold/5 px-3 py-2 text-start font-mono text-[11px] leading-snug text-gold transition-colors hover:border-gold/50 hover:bg-gold/15 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+                  onClick={() => runChip(s)}
+                  disabled={s.action === "seed" && seedMutation.isPending}
+                  className={cn(
+                    "flex items-center gap-2 rounded-sm border px-3 py-2 text-start font-mono text-[11px] leading-snug transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none disabled:opacity-60",
+                    s.action === "seed"
+                      ? "border-gold/50 bg-gold/15 text-gold hover:border-gold hover:bg-gold/25"
+                      : "border-gold/25 bg-gold/5 text-gold hover:border-gold/50 hover:bg-gold/15"
+                  )}
                 >
-                  <s.icon className="size-3 shrink-0 text-gold/70" />
+                  {s.action === "seed" && seedMutation.isPending ? (
+                    <Loader2 className="size-3 shrink-0 animate-spin text-gold/70" />
+                  ) : (
+                    <s.icon className="size-3 shrink-0 text-gold/70" />
+                  )}
                   {s.text}
                 </motion.button>
               ))}
@@ -289,11 +328,21 @@ function DockBody() {
             <button
               key={chip.id}
               role="listitem"
-              onClick={() => send(chip.text)}
+              onClick={() => runChip(chip)}
+              disabled={chip.action === "seed" && seedMutation.isPending}
               title={chip.text}
-              className="flex shrink-0 items-center gap-1.5 rounded-full border border-gold/25 bg-gold/[0.06] px-3 py-1.5 font-mono text-[10px] leading-none text-gold/90 transition-all hover:border-gold/60 hover:bg-gold/15 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:scale-[0.97]"
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-[10px] leading-none transition-all hover:border-gold/60 hover:bg-gold/15 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:scale-[0.97] disabled:opacity-60",
+                chip.action === "seed"
+                  ? "border-gold/50 bg-gold/15 text-gold"
+                  : "border-gold/25 bg-gold/[0.06] text-gold/90"
+              )}
             >
-              <chip.icon className="size-3 shrink-0 text-gold/70" />
+              {chip.action === "seed" && seedMutation.isPending ? (
+                <Loader2 className="size-3 shrink-0 animate-spin text-gold/70" />
+              ) : (
+                <chip.icon className="size-3 shrink-0 text-gold/70" />
+              )}
               <span className="max-w-[240px] truncate">{chip.text}</span>
             </button>
           ))}
@@ -372,6 +421,7 @@ export function AgentDockSheet() {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent
         side={lang === "ar" ? "left" : "right"}
+        aria-describedby={undefined}
         className="flex w-full flex-col gap-0 border-e border-border bg-card p-0 sm:max-w-md"
       >
         <SheetHeader className="flex-row items-center justify-between border-b border-border p-0 px-4 py-3">

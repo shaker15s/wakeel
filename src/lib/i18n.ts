@@ -161,6 +161,9 @@ export const en = {
     toastOk: "Operator activated",
     toastOkDesc: (name: string) => `Welcome aboard, ${name} — your console is live.`,
     toastErr: "Activation failed",
+    or: "— OR —",
+    importCta: "Have a workspace file? Import it instead",
+    importing: "IMPORTING…",
   },
 
   boot: {
@@ -183,6 +186,13 @@ export const en = {
     exportTitle: "Workspace exported",
     exportDesc: (s: number, r: number) => `${s} system${s === 1 ? "" : "s"} · ${r} record${r === 1 ? "" : "s"} · JSON saved to your machine.`,
     exportErr: "Export failed",
+    importOp: "Import workspace",
+    importTitle: "Workspace imported",
+    importDesc: (s: number, r: number) =>
+      `${s} system${s === 1 ? "" : "s"} · ${r} record${r === 1 ? "" : "s"} restored into a fresh operator workspace.`,
+    importInvalid: "That file is not a Wakeel workspace export (wakeel.workspace/v1).",
+    importErr: "Import failed",
+    workspaceSection: "WORKSPACE DATA",
   },
 
   side: {
@@ -324,6 +334,7 @@ export const en = {
       STATUS: "STATUS",
       DELETE: "DELETE",
       SHARE: "SHARE",
+      IMPORT: "IMPORT",
     },
     emptyT: "LEDGER EMPTY",
     emptyC: "Once you run a scan, forge a system or chat with Wakeel, every action lands here.",
@@ -411,6 +422,12 @@ export const en = {
     true: "TRUE",
     false: "FALSE",
     selectField: (label: string) => `Select ${label.toLowerCase()}`,
+    seed: "SEED SAMPLE DATA",
+    seeding: "SEEDING…",
+    seedOk: "Sample data grown",
+    seedOkDesc: (n: number) =>
+      `Wakeel added ${n} realistic record${n === 1 ? "" : "s"} — logged to the ledger.`,
+    seedErr: "Seed failed",
   },
 
   auto: {
@@ -467,7 +484,7 @@ export const en = {
     sugg1: "What systems do I have?",
     sugg2: "Suggest an automation for my CRM",
     sugg3: (name: string) => `How many records are in ${name}?`,
-    insightEmpty: (name: string) => `“${name}” is live but empty — want me to seed realistic sample data?`,
+    insightEmpty: (name: string) => `Seed realistic sample data into “${name}”`,
     insightStale: (name: string) => `It’s been quiet around ${name} — want a status digest?`,
     insightRich: (name: string) => `Give me a pulse on ${name} — totals, recent writes, anything odd.`,
     insightCold: "No systems yet — give me your company URL and I’ll map your stack.",
@@ -503,6 +520,8 @@ export const en = {
     toastRevokeOkDesc: "The URL stops working immediately.",
     toastErr: "Share action failed",
     footerNote: "You can revoke the link at any time — access dies instantly.",
+    qrLabel: "SCAN TO OPEN",
+    qrHint: "Point any camera at the code — it opens this read-only view.",
     // public-side view
     pubEyebrow: "SHARED SYSTEM · READ-ONLY SNAPSHOT",
     pubBy: (w: string) => `SHARED BY THE ${w} WORKSPACE`,
@@ -703,6 +722,9 @@ export const ar: Dict = {
     toastOk: "تم تفعيل المشغّل",
     toastOkDesc: (name: string) => `أهلاً بك ${name} — كونسولك أصبح جاهزاً.`,
     toastErr: "فشل التفعيل",
+    or: "— أو —",
+    importCta: "لديك ملف مساحة عمل؟ استورده بدلاً من ذلك",
+    importing: "جارٍ الاستيراد…",
   },
 
   boot: {
@@ -725,6 +747,13 @@ export const ar: Dict = {
     exportTitle: "صُدّرت مساحة العمل",
     exportDesc: (s: number, r: number) => `${s} ${s === 1 ? "نظام" : "أنظمة"} · ${r} ${r === 1 ? "سجل" : "سجلات"} · حُفظ ملف JSON على جهازك.`,
     exportErr: "فشل التصدير",
+    importOp: "استيراد مساحة العمل",
+    importTitle: "استُوردت مساحة العمل",
+    importDesc: (s: number, r: number) =>
+      `استُعيد ${s} ${s === 1 ? "نظام" : "أنظمة"} · ${r} ${r === 1 ? "سجل" : "سجلات"} في مساحة عمل مشغّل جديدة.`,
+    importInvalid: "هذا الملف ليس ملف تصدير مساحة عمل واكيل (wakeel.workspace/v1).",
+    importErr: "فشل الاستيراد",
+    workspaceSection: "بيانات المساحة",
   },
 
   side: {
@@ -867,6 +896,7 @@ export const ar: Dict = {
       STATUS: "حالة",
       DELETE: "حذف",
       SHARE: "مشاركة",
+      IMPORT: "استيراد",
     },
     emptyT: "السجل فارغ",
     emptyC: "بمجرد أن تشغّل مسحاً أو تبني نظاماً أو تحاور واكيل، كل إجراء سيهبط هنا.",
@@ -954,6 +984,12 @@ export const ar: Dict = {
     true: "نعم",
     false: "لا",
     selectField: (label: string) => `اختر ${label}`,
+    seed: "زرع بيانات تجريبية",
+    seeding: "جارٍ الزرع…",
+    seedOk: "نَمَت البيانات التجريبية",
+    seedOkDesc: (n: number) =>
+      `أضاف واكيل ${n} ${n === 1 ? "سجلاً واقعياً" : "سجلات واقعية"} — سُجلت في الدفتر.`,
+    seedErr: "فشلت الزراعة",
   },
 
   auto: {
@@ -1010,7 +1046,7 @@ export const ar: Dict = {
     sugg1: "ما الأنظمة التي أملكها؟",
     sugg2: "اقترح أتمتة لنظام العملاء عندي",
     sugg3: (name: string) => `كم سجلاً في ${name}؟`,
-    insightEmpty: (name: string) => `«${name}» حيّ لكنه فارغ — أجهّز لك بيانات تجريبية واقعية؟`,
+    insightEmpty: (name: string) => `ازرع بيانات تجريبية واقعية في «${name}»`,
     insightStale: (name: string) => `لا نشاط حول ${name} مؤخراً — أعدّ لك ملخصاً للحالة؟`,
     insightRich: (name: string) => `أعطني نبضة عن ${name} — الإجماليات وآخر الكتابات وأي شيء غريب.`,
     insightCold: "لا أنظمة بعد — أعطني رابط شركتك وسأرصد منظومتك.",
@@ -1046,6 +1082,8 @@ export const ar: Dict = {
     toastRevokeOkDesc: "توقف الرابط عن العمل فوراً.",
     toastErr: "فشلت عملية المشاركة",
     footerNote: "يمكنك إبطال الرابط في أي وقت — ينقطع الوصول فوراً.",
+    qrLabel: "امسح للفتح",
+    qrHint: "وجّه أي كاميرا نحو الرمز — سيفتح هذا العرض للقراءة فقط.",
     // public-side view
     pubEyebrow: "نظام مُشارك · لقطة قراءة فقط",
     pubBy: (w: string) => `مُشارَك من مساحة عمل ${w}`,
@@ -1155,6 +1193,15 @@ export function localizeActivity(
   if ((m = /^Bulk deleted (\d+) records? from (.+)$/.exec(t))) {
     const n = Number(m[1]);
     parts = [`حُذف ${n} ${n === 1 ? "سجل" : "سجلات"} من`, { bdi: m[2] }];
+  } else if ((m = /^Seeded (\d+) sample records? into (.+)$/.exec(t))) {
+    const n = Number(m[1]);
+    parts = [
+      `زُرع ${n} ${n === 1 ? "سجل تجريبي" : "سجلات تجريبية"} في`,
+      { bdi: m[2] },
+    ];
+  } else if ((m = /^Imported (\d+) systems? for (.+)$/.exec(t))) {
+    const n = Number(m[1]);
+    parts = [`استُورد ${n} ${n === 1 ? "نظام" : "أنظمة"} لـ`, { bdi: m[2] }];
   } else if ((m = /^Discovered (\d+) systems? for (.+)$/.exec(t))) {
     const n = Number(m[1]);
     parts = [`رُصد ${n} ${n === 1 ? "نظام" : "أنظمة"} لـ`, { bdi: m[2] }];
@@ -1196,6 +1243,12 @@ export function localizeActivity(
       detail = `تم إصدار رابط قراءة فقط · الرمز ${dm[1]}`;
     } else if ((dm = /^Token (.+?)… can no longer be opened\.$/.exec(detail))) {
       detail = `الرمز ${dm[1]}… لم يعد يفتح.`;
+    } else if (
+      (dm = /^Restored from a workspace file · (\d+) systems? · (\d+) records?$/.exec(detail))
+    ) {
+      const s = Number(dm[1]);
+      const r = Number(dm[2]);
+      detail = `استُرجع من ملف مساحة عمل · ${s} ${s === 1 ? "نظام" : "أنظمة"} · ${r} ${r === 1 ? "سجل" : "سجلات"}`;
     }
   }
 

@@ -117,6 +117,7 @@ const TYPE_COLORS: Record<string, string> = {
   RESTORE: "text-live border-live/40 bg-live/10",
   AUTOMATION: "text-gold border-gold/30 bg-gold/5",
   SHARE: "text-gold-pale border-gold-pale/40 bg-gold-pale/10",
+  IMPORT: "text-live border-live/40 bg-live/10",
 };
 
 export function TypeChip({

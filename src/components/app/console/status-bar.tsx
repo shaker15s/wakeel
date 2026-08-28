@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Bot, Download, LogOut, Search } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Bot, Download, LogOut, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { WakeelMark } from "@/components/app/logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -28,6 +28,7 @@ import {
 import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { importWorkspaceFile } from "@/lib/workspace-import";
 
 function LiveClock() {
   const [now, setNow] = useState<Date | null>(null);
@@ -61,6 +62,9 @@ export function StatusBar() {
   const toggleAgentDock = useWakeel((s) => s.toggleAgentDock);
   const setPaletteOpen = useWakeel((s) => s.setPaletteOpen);
   const switchOperator = useWakeel((s) => s.switchOperator);
+  const setUserId = useWakeel((s) => s.setUserId);
+  const setConsoleTab = useWakeel((s) => s.setConsoleTab);
+  const queryClient = useQueryClient();
 
   const { data } = useQuery({
     queryKey: ["user", userId],
@@ -91,6 +95,40 @@ export function StatusBar() {
   };
 
   const [exporting, setExporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+
+  /**
+   * Import a `wakeel.workspace/v1` export file: client-side sanity check,
+   * server-side re-validation + restore into a fresh operator, then adopt
+   * that operator as the live session (cache wiped so every view refetches).
+   */
+  const handleImportFile = async (file: File) => {
+    if (importing) return;
+    setImporting(true);
+    try {
+      const res = await importWorkspaceFile(file);
+      if (!res.ok) {
+        if (res.reason === "invalid") {
+          toast.error(t.sb.importInvalid);
+        } else {
+          toast.error(t.sb.importErr, { description: res.message });
+        }
+        return;
+      }
+      // adopt the restored operator as the live session
+      setUserId(res.userId);
+      queryClient.clear();
+      setConsoleTab("systems");
+      toast.success(t.sb.importTitle, {
+        description: t.sb.importDesc(res.systems, res.records),
+      });
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const handleExport = async () => {
     if (!userId || exporting) return;
     setExporting(true);
@@ -234,6 +272,9 @@ export function StatusBar() {
               {user ? `${user.name} · ${user.workspace}` : "OPERATOR"}
             </DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-border" />
+            <DropdownMenuLabel className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/60">
+              {t.sb.workspaceSection}
+            </DropdownMenuLabel>
             <DropdownMenuItem
               onClick={handleExport}
               disabled={exporting || systemCount === 0}
@@ -241,6 +282,34 @@ export function StatusBar() {
             >
               <Download className="size-3.5" /> {t.sb.exportOp}
             </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-secondary focus:text-gold"
+            >
+              {importing ? (
+                <span
+                  aria-hidden
+                  className="size-3.5 shrink-0 animate-spin rounded-full border border-gold/30 border-t-gold"
+                />
+              ) : (
+                <Upload className="size-3.5" />
+              )}
+              {t.sb.importOp}
+            </DropdownMenuItem>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              aria-hidden
+              tabIndex={-1}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleImportFile(file);
+              }}
+            />
+            <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuItem
               onClick={handleSwitch}
               className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-secondary focus:text-gold"

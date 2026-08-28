@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -25,6 +25,7 @@ import { MonoLabel } from "@/components/app/motion-bits";
 import { createUser } from "@/lib/api-client";
 import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
+import { importWorkspaceFile } from "@/lib/workspace-import";
 
 interface FormState {
   name: string;
@@ -43,6 +44,9 @@ export function OnboardingDialog() {
   const setOpen = useWakeel((s) => s.setOnboardingOpen);
   const setUserId = useWakeel((s) => s.setUserId);
   const setView = useWakeel((s) => s.setView);
+  const setConsoleTab = useWakeel((s) => s.setConsoleTab);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
 
   const [form, setForm] = useState<FormState>({
     name: "",
@@ -84,6 +88,33 @@ export function OnboardingDialog() {
       workspace: form.workspace.trim(),
       ...(form.role ? { role: form.role } : {}),
     });
+  };
+
+  /** restore a workspace export instead of creating a throwaway operator */
+  const handleImportFile = async (file: File) => {
+    if (importing || mutation.isPending) return;
+    setImporting(true);
+    try {
+      const res = await importWorkspaceFile(file);
+      if (!res.ok) {
+        if (res.reason === "invalid") {
+          toast.error(t.sb.importInvalid);
+        } else {
+          toast.error(t.sb.importErr, { description: res.message });
+        }
+        return;
+      }
+      setUserId(res.userId);
+      setView("console");
+      setConsoleTab("systems");
+      setOpen(false);
+      toast.success(t.sb.importTitle, {
+        description: t.sb.importDesc(res.systems, res.records),
+      });
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   return (
@@ -179,7 +210,7 @@ export function OnboardingDialog() {
 
               <Button
                 type="submit"
-                disabled={mutation.isPending}
+                disabled={mutation.isPending || importing}
                 className="mt-2 h-11 w-full bg-primary font-mono text-[12px] font-medium uppercase tracking-[0.14em] text-primary-foreground hover:bg-gold-pale"
               >
                 {mutation.isPending ? (
@@ -194,6 +225,43 @@ export function OnboardingDialog() {
               <p className="text-center font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
                 {t.onb.storedNote}
               </p>
+
+              {/* import path — restores a wakeel.workspace/v1 export */}
+              <div className="mt-1 flex flex-col items-center gap-2.5">
+                <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-muted-foreground/50">
+                  {t.onb.or}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing || mutation.isPending}
+                  className="group flex min-h-9 items-center gap-2 rounded-sm border border-dashed border-gold/30 bg-gold/[0.04] px-3.5 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-gold/80 transition-all hover:border-gold/60 hover:bg-gold/10 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-60"
+                >
+                  {importing ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      {t.onb.importing}
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="size-3.5 transition-transform group-hover:-translate-y-0.5" />
+                      {t.onb.importCta}
+                    </>
+                  )}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  aria-hidden
+                  tabIndex={-1}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleImportFile(file);
+                  }}
+                />
+              </div>
             </form>
           </div>
         </div>

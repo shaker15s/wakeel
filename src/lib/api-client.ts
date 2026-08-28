@@ -31,7 +31,8 @@ export type ActivityType =
   | "CHAT"
   | "STATUS"
   | "SHARE"
-  | "AUTOMATION";
+  | "AUTOMATION"
+  | "IMPORT";
 
 export interface Operator {
   id: string;
@@ -289,6 +290,35 @@ export function bulkDeleteRecords(ids: string[]) {
     method: "POST",
     body: JSON.stringify({ ids }),
   });
+}
+
+/**
+ * POST /api/workspace/import — restore a `wakeel.workspace/v1` payload into a
+ * brand-new operator workspace. The payload is the exact object the client
+ * export builds; the server re-validates and normalizes everything.
+ */
+export function importWorkspace(payload: {
+  format: "wakeel.workspace/v1";
+  exportedAt: string;
+  operator: { name: string; workspace: string; role?: string | null };
+  systems: Record<string, unknown>[];
+}) {
+  return api<{
+    user: Operator;
+    systems: number;
+    records: number;
+  }>("/api/workspace/import", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** POST /api/systems/[id]/seed — grow realistic sample records (LLM-backed). */
+export function seedSystem(systemId: string, count = 5) {
+  return api<{ seeded: number; source: "llm" | "template" }>(
+    `/api/systems/${encodeURIComponent(systemId)}/seed`,
+    { method: "POST", body: JSON.stringify({ count }) }
+  );
 }
 
 export function runAutomation(

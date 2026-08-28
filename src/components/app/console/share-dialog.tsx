@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Copy, Eye, Link2, Loader2, ShieldCheck, Share2, Unlink } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { Check, Copy, Eye, Link2, Loader2, ScanLine, ShieldCheck, Share2, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,12 @@ export function ShareDialog({
     enabled: !!systemId && open,
   });
   const share = data?.share ?? null;
+
+  /** absolute share URL — the QR payload (client only, computed lazily) */
+  const shareUrl = useMemo(() => {
+    if (!share || typeof window === "undefined") return "";
+    return `${window.location.origin}/${share.url}`;
+  }, [share]);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["share", systemId] });
@@ -181,6 +188,46 @@ export function ShareDialog({
                 {t.share.issuedLabel} {timeAgo(share.createdAt, lang)}
               </span>
             </div>
+
+            {/* QR handoff panel — targeting frame + gold code on blueprint grid */}
+            {shareUrl && (
+              <div className="relative overflow-hidden rounded-sm border border-gold/20 bg-gold/[0.03] p-4">
+                <div className="bg-blueprint pointer-events-none absolute inset-0 opacity-60" />
+                <div className="noise" aria-hidden />
+                {/* corner brackets */}
+                <span aria-hidden className="pointer-events-none absolute start-1.5 top-1.5 size-3 border-s-2 border-t-2 border-gold/70" />
+                <span aria-hidden className="pointer-events-none absolute end-1.5 top-1.5 size-3 border-e-2 border-t-2 border-gold/70" />
+                <span aria-hidden className="pointer-events-none absolute bottom-1.5 start-1.5 size-3 border-b-2 border-s-2 border-gold/70" />
+                <span aria-hidden className="pointer-events-none absolute bottom-1.5 end-1.5 size-3 border-b-2 border-e-2 border-gold/70" />
+                <div className="relative flex items-center gap-4">
+                  <div className="shrink-0 rounded-sm border border-gold/30 bg-[#0A0908] p-1.5 shadow-[0_0_24px_rgba(232,180,74,0.12)]">
+                    <QRCodeSVG
+                      value={shareUrl}
+                      size={92}
+                      level="M"
+                      fgColor="#E8B44A"
+                      bgColor="transparent"
+                      aria-label={t.share.qrLabel}
+                    />
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-gold">
+                      <ScanLine className="size-3.5 text-gold/70" />
+                      {t.share.qrLabel}
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      {t.share.qrHint}
+                    </p>
+                    <p
+                      dir="ltr"
+                      className="truncate font-mono text-[9px] tracking-[0.06em] text-muted-foreground/50"
+                    >
+                      {shareUrl}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* revoke zone */}
             <div className="flex items-center justify-between gap-2 rounded-sm border border-destructive/25 bg-destructive/5 px-3 py-2.5">
