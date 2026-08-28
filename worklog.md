@@ -304,3 +304,17 @@ Work Log:
 Stage Summary:
 - Answer recorded: API source = z-ai-web-dev-sdk provided by the sandbox platform (GLM behind it); swapping models is now a one-line .env change (WAKEEL_MODEL); swapping PROVIDERS (OpenAI/Anthropic/etc.) = rewriting only ai.ts (responses are already OpenAI-shaped {choices[].message.content}).
 - Next phase priorities unchanged from Task 12 (auth → rate limits → deploy).
+---
+Task ID: 14
+Agent: orchestrator (Z.ai Code) — user-triggered round
+Task: User asked (EG-Arabic) for a professional, exhaustive, perfectionist developer critique of the whole project (big and small details).
+
+Work Log:
+- Evidence-based audit with live probes: read schema.prisma, http.ts, ai.ts, api-client.ts, discovery/scan, workspace/import, share, records, users, activity, layout.tsx; grepped for XSS (only shadcn ui/chart dangerouslySetInnerHTML — our own CSS vars, low risk), TODO/console.log (ZERO in src/), `any` (none in app code), middleware (absent), transactions (absent in import).
+- LIVE IDOR PROOF: created attacker user Eve → read another user's system via GET /api/systems/[id] with zero auth, then DELETEd it successfully. Routes with NO ownership check: systems/[id] GET/PATCH/DELETE, systems/[id]/share POST, records/[id] PATCH/DELETE, records/bulk-delete (comment claims "ownership checked" — it only checks existence — misleading), users/[id], agent/chat GET/POST, agent/digest. Mitigated only by cuid unguessability.
+- More evidence: workspace/import does user.create then a per-system loop with NO $transaction (partial-import orphans); record POST accepts z.record(z.unknown()) with NO cell-size cap (CSV import caps 500 — inconsistent) and no per-system record-count cap; GET systems/[id] returns ALL records unbounded; activity/chat take-50 with no cursor; fetch timeout in api-client.ts is AbortSignal.timeout(180_000) — 3 minutes of possible dead spinners; no middleware → no security headers/CSP/rate-limit; share token = randomBytes(18) base64url (~144-bit, GOOD); share payload leaks owner workspace name (minor); muted-foreground #9a9184 on #0A0908 ≈ 6.5:1 contrast (PASSES AA — good); layout has title/description/OG but NO twitter card / OG image / sitemap.
+- Cleaned the attacker test user after the probe. No production code changed this round (critique-only, as requested).
+
+Stage Summary:
+- Full critique delivered to user (AR) with scorecard: function 8.5 · code-arch 7.5 · security 2.5 · data-integrity 5 · perf/scale 5.5 · UX 8 · i18n 7.5 · a11y 7 · SEO 4 · ops 2 → ~5.7/10 sellable today. Verdict: elite prototype, security+ops hole blocks sale, NOT architecture.
+- P0 fix list: ownership guard in all [id]/user-scoped routes → server auth → server-side LLM timeouts → $transaction in import → rate-limit middleware. P1: pagination (records/systems/chat/activity), 180s→20s fetch timeout, seed timeout, unified cell caps. P2: SSE push instead of polling, AR analytics labels, error tracking, legal pages, sitemap/OG-image, stored-language mixing.
