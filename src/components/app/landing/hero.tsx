@@ -5,24 +5,26 @@ import { motion } from "framer-motion";
 import { ArrowDown, Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CountUp, MonoLabel } from "@/components/app/motion-bits";
+import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 
-const STATS = [
-  { value: 12480, label: "TASKS EXECUTED / HR", decimals: 0, suffix: "" },
-  { value: 3214, label: "SYSTEMS MAPPED", decimals: 0, suffix: "" },
-  { value: 0.4, label: "MEAN RESPONSE", decimals: 1, suffix: "s" },
-  { value: 99.98, label: "UPTIME", decimals: 2, suffix: "%" },
-];
+const STATS_META = [
+  { key: "statTasks", value: 12480, decimals: 0, suffix: "" },
+  { key: "statSystems", value: 3214, decimals: 0, suffix: "" },
+  { key: "statResponse", value: 0.4, decimals: 1, suffix: "s" },
+  { key: "statUptime", value: 99.98, decimals: 2, suffix: "%" },
+] as const;
 
-const CHIPS = [
-  { text: "SYSTEMS MAPPED 12", className: "-left-4 top-8 sm:-left-10", delay: 0, duration: 5.2 },
-  { text: "SCAN ACTIVE", className: "-right-3 top-1/2 sm:-right-8", delay: 0.8, duration: 4.4 },
-  { text: "UPTIME 99.98%", className: "-left-2 bottom-12 sm:-left-6", delay: 1.6, duration: 6 },
-];
+const CHIPS_META = [
+  { key: "chip1", className: "-left-4 top-8 sm:-left-10", delay: 0, duration: 5.2 },
+  { key: "chip2", className: "-right-3 top-1/2 sm:-right-8", delay: 0.8, duration: 4.4 },
+  { key: "chip3", className: "-left-2 bottom-12 sm:-left-6", delay: 1.6, duration: 6 },
+] as const;
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
 export function Hero() {
+  const t = useT();
   const setOnboardingOpen = useWakeel((s) => s.setOnboardingOpen);
   const userId = useWakeel((s) => s.userId);
   const setView = useWakeel((s) => s.setView);
@@ -72,7 +74,7 @@ export function Hero() {
             transition={{ duration: 0.6, ease }}
           >
             <MonoLabel gold className="border border-gold/25 bg-gold/5 px-2.5 py-1.5">
-              [ وكيل — OPERATIONAL AI EMPLOYEE ]
+              [ {t.hero.eyebrow} ]
             </MonoLabel>
           </motion.div>
 
@@ -82,8 +84,8 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 0.1, ease }}
             className="font-display text-5xl font-bold leading-[1.02] tracking-tight text-foreground sm:text-6xl lg:text-7xl xl:text-[5.25rem]"
           >
-            Hire the employee{" "}
-            <span className="text-glow italic text-gold">that never clocks out.</span>
+            {t.hero.titleA}{" "}
+            <span className="text-glow italic text-gold">{t.hero.titleB}</span>
           </motion.h1>
 
           <motion.p
@@ -92,9 +94,7 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 0.2, ease }}
             className="max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg"
           >
-            Wakeel discovers the systems your company already runs — CRM, ERP,
-            storage, finance — then forges the ones you are missing, on demand.
-            One hire. Your whole operation.
+            {t.hero.sub}
           </motion.p>
 
           <motion.div
@@ -107,7 +107,7 @@ export function Hero() {
               onClick={hire}
               className="h-12 bg-primary px-7 font-mono text-[12px] uppercase tracking-[0.14em] text-primary-foreground shadow-[0_0_28px_-6px_rgba(232,180,74,0.5)] hover:bg-gold-pale hover:shadow-[0_0_36px_-4px_rgba(232,180,74,0.65)]"
             >
-              Hire your Wakeel
+              {t.hero.ctaPrimary}
             </Button>
             <Button
               asChild
@@ -115,7 +115,7 @@ export function Hero() {
               className="h-12 border border-border bg-transparent px-6 font-mono text-[12px] uppercase tracking-[0.14em] text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
               <a href="#preview">
-                Explore the console <ArrowDown className="size-3.5" />
+                {t.hero.ctaSecondary} <ArrowDown className="size-3.5" />
               </a>
             </Button>
           </motion.div>
@@ -172,9 +172,9 @@ export function Hero() {
           </div>
 
           {/* floating status chips */}
-          {CHIPS.map((chip) => (
+          {CHIPS_META.map((chip) => (
             <motion.div
-              key={chip.text}
+              key={chip.key}
               animate={{ y: [0, -9, 0] }}
               transition={{
                 duration: chip.duration,
@@ -186,7 +186,7 @@ export function Hero() {
             >
               <span className="flex items-center gap-1.5 rounded-sm border border-gold/25 bg-card/90 px-2 py-1 font-mono text-[10px] tracking-[0.14em] text-gold backdrop-blur-sm">
                 <Radar className="size-3" />
-                {chip.text}
+                {t.hero[chip.key]}
               </span>
             </motion.div>
           ))}
@@ -201,11 +201,11 @@ export function Hero() {
         className="relative border-t border-border bg-background/60 backdrop-blur-sm"
       >
         <div className="mx-auto grid max-w-7xl grid-cols-2 md:grid-cols-4">
-          {STATS.map((stat, i) => (
+          {STATS_META.map((stat, i) => (
             <div
-              key={stat.label}
+              key={stat.key}
               className={`flex flex-col gap-1 px-5 py-6 sm:px-8 ${
-                i > 0 ? "border-l border-border/70" : ""
+                i > 0 ? "border-s border-border/70" : ""
               } ${i >= 2 ? "border-t border-border/70 md:border-t-0" : ""}`}
             >
               <CountUp
@@ -214,7 +214,7 @@ export function Hero() {
                 suffix={stat.suffix}
                 className="font-display text-2xl font-bold text-foreground sm:text-3xl"
               />
-              <MonoLabel>{stat.label}</MonoLabel>
+              <MonoLabel>{t.hero[stat.key]}</MonoLabel>
             </div>
           ))}
         </div>

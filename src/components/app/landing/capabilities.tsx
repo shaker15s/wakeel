@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { SectionHeading } from "@/components/app/motion-bits";
+import { useT } from "@/lib/i18n";
 
 interface Capability {
   icon: LucideIcon;
@@ -18,54 +19,30 @@ interface Capability {
   copy: string;
 }
 
-const CAPABILITIES: Capability[] = [
-  {
-    icon: Radar,
-    title: "System Discovery",
-    copy: "Real web research pointed at your company URL maps every system you already run — with category, capabilities and a confidence score.",
-  },
-  {
-    icon: Hammer,
-    title: "System Forging",
-    copy: "Describe any tool you need in plain language. Wakeel forges a working system with entities, typed fields and automations in one pass.",
-  },
-  {
-    icon: Bot,
-    title: "Agent Dock",
-    copy: "Chat with your employee. It knows your systems, your records and everything that happened in the ledger this week — and answers in character.",
-  },
-  {
-    icon: Database,
-    title: "Structured Records",
-    copy: "Every forged system is a real mini-app: typed fields, CRUD records, persisted in your workspace. Not a mockup — actual software.",
-  },
-  {
-    icon: Activity,
-    title: "Ops Ledger",
-    copy: "Every scan, forge, adoption and edit is logged to a mission-control ledger. Nothing your AI employee does happens in the dark.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Scoped by Design",
-    copy: "Per-operator workspaces. Your systems, your records, your trail — nothing shared across operators, nothing leaked.",
-  },
-];
-
 export function Capabilities() {
+  const t = useT();
+  const CAPABILITIES: Capability[] = [
+    { icon: Radar, title: t.caps.c1t, copy: t.caps.c1c },
+    { icon: Hammer, title: t.caps.c2t, copy: t.caps.c2c },
+    { icon: Bot, title: t.caps.c3t, copy: t.caps.c3c },
+    { icon: Database, title: t.caps.c4t, copy: t.caps.c4c },
+    { icon: Activity, title: t.caps.c5t, copy: t.caps.c5c },
+    { icon: ShieldCheck, title: t.caps.c6t, copy: t.caps.c6c },
+  ];
   return (
     <section id="capabilities" className="relative scroll-mt-20 py-24 sm:py-32">
       {/* faint blueprint backdrop */}
       <div className="bg-blueprint pointer-events-none absolute inset-0 opacity-40" aria-hidden />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
         <SectionHeading
-          eyebrow="CAPABILITIES"
+          eyebrow={t.caps.eyebrow}
           title={
             <>
-              An employee with a
-              <span className="text-gold"> full toolkit.</span>
+              {t.caps.titleA}
+              <span className="text-gold">{t.caps.titleB}</span>
             </>
           }
-          copy="Six operating capabilities, one console. Wakeel is not a chatbot with plugins — it is staff."
+          copy={t.caps.copy}
         />
 
         <div className="mt-16 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

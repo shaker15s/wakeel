@@ -3,6 +3,7 @@
 import { HealthBar } from "@/components/app/bits";
 import { WakeelMark } from "@/components/app/logo";
 import { MonoLabel, Reveal, SectionHeading } from "@/components/app/motion-bits";
+import { useT } from "@/lib/i18n";
 
 const MOCK_SYSTEMS = [
   { name: "Sage ERP", category: "ERP", health: 92, origin: "DISCOVERED" },
@@ -11,37 +12,26 @@ const MOCK_SYSTEMS = [
   { name: "Leave Tracker", category: "HR", health: 88, origin: "FORGED" },
 ];
 
-const MOCK_CHAT = [
-  {
-    role: "agent" as const,
-    text: "Low-stock sweep done. 3 items under threshold in Inventory Pro — shall I draft purchase orders?",
-    time: "18:42",
-  },
-  {
-    role: "user" as const,
-    text: "Yes, and ping the warehouse channel when they're sent.",
-    time: "18:43",
-  },
-  {
-    role: "agent" as const,
-    text: "Drafted 3 POs. Wired the alert → warehouse channel automation. Logged to ledger.",
-    time: "18:43",
-  },
-];
-
 export function ConsolePreview() {
+  const t = useT();
+  const MOCK_CHAT = [
+    { role: "agent" as const, text: t.preview.chatA1, time: "18:42" },
+    { role: "user" as const, text: t.preview.chatU1, time: "18:43" },
+    { role: "agent" as const, text: t.preview.chatA2, time: "18:43" },
+  ];
+
   return (
     <section id="preview" className="relative scroll-mt-20 py-24 sm:py-32">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <SectionHeading
-          eyebrow="CONSOLE"
+          eyebrow={t.preview.eyebrow}
           title={
             <>
-              Mission control for
-              <span className="text-gold"> your operation.</span>
+              {t.preview.titleA}
+              <span className="text-gold">{t.preview.titleB}</span>
             </>
           }
-          copy="Discovery, forged systems, records and a live ops ledger — with your AI employee one keystroke away in the agent dock."
+          copy={t.preview.copy}
         />
 
         <Reveal className="mt-16">
@@ -69,13 +59,13 @@ export function ConsolePreview() {
                 {/* systems mini table */}
                 <div className="bg-card p-4 md:col-span-3">
                   <div className="mb-3 flex items-center justify-between">
-                    <MonoLabel gold>SYSTEMS MAP</MonoLabel>
-                    <MonoLabel>4 ACTIVE</MonoLabel>
+                    <MonoLabel gold>{t.preview.systemsMap}</MonoLabel>
+                    <MonoLabel>{t.preview.fourActive}</MonoLabel>
                   </div>
                   <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 border-b border-border pb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
-                    <span>System</span>
-                    <span>Origin</span>
-                    <span className="w-20 text-right">Health</span>
+                    <span className="text-start">{t.preview.thSystem}</span>
+                    <span>{t.preview.thOrigin}</span>
+                    <span className="w-20 text-end">{t.preview.thHealth}</span>
                   </div>
                   {MOCK_SYSTEMS.map((sys) => (
                     <div
@@ -102,7 +92,7 @@ export function ConsolePreview() {
                       </span>
                       <div className="flex w-20 flex-col items-end gap-1">
                         <HealthBar value={sys.health} />
-                        <span className="font-mono text-[9px] tabular-nums text-muted-foreground">
+                        <span className="font-mono text-[9px] tabular-nums text-muted-foreground" dir="ltr">
                           {sys.health}%
                         </span>
                       </div>
@@ -113,10 +103,10 @@ export function ConsolePreview() {
                 {/* chat snippet */}
                 <div className="flex flex-col gap-3 bg-card p-4 md:col-span-2">
                   <div className="flex items-center justify-between">
-                    <MonoLabel gold>AGENT DOCK</MonoLabel>
+                    <MonoLabel gold>{t.preview.agentDock}</MonoLabel>
                     <span className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-live">
                       <span className="size-1.5 rounded-full bg-live shadow-[0_0_6px_rgba(62,207,142,0.8)]" />
-                      ON DUTY
+                      {t.preview.onDuty}
                     </span>
                   </div>
                   {MOCK_CHAT.map((msg, i) => (
@@ -129,16 +119,16 @@ export function ConsolePreview() {
                       }
                     >
                       <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
-                        {msg.role === "user" ? "OPERATOR" : "WAKEEL"} · {msg.time}
+                        {msg.role === "user" ? t.preview.operator : t.preview.wakeel} · {msg.time}
                       </p>
                       {msg.text}
                     </div>
                   ))}
                   <div className="mt-auto flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2">
                     <span className="font-mono text-[11px] text-muted-foreground/60">
-                      Message Wakeel…
+                      {t.preview.msgPlaceholder}
                     </span>
-                    <span className="animate-blink ml-auto font-mono text-gold">
+                    <span className="animate-blink ms-auto font-mono text-gold">
                       ▌
                     </span>
                   </div>

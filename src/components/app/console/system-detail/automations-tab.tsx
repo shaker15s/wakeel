@@ -14,6 +14,7 @@ import {
   runAutomation,
 } from "@/lib/api-client";
 import type { AutomationLogLine, AutomationRun } from "@/lib/api-client";
+import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -50,6 +51,7 @@ function LogConsole({
   status: "RUNNING" | "DONE" | "FAILED";
   failure?: string | null;
 }) {
+  const t = useT();
   return (
     <div
       className={cn(
@@ -59,8 +61,9 @@ function LogConsole({
           : "border-border bg-black/40"
       )}
       role="log"
-      aria-label="Automation execution log"
+      aria-label={t.auto.logLabel}
       style={{ maxHeight: 240 }}
+      dir="ltr"
     >
       {/* scanline sheen while running */}
       {status === "RUNNING" && (
@@ -108,7 +111,7 @@ function LogConsole({
           <li className="mt-1.5 flex gap-3 border-t border-destructive/20 pt-1.5">
             <span className="w-14 shrink-0" />
             <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-destructive">
-              EXIT CODE 1 · {failure}
+              {t.auto.exitCode(failure)}
             </span>
           </li>
         )}
@@ -133,6 +136,8 @@ export function AutomationsTab({
   invalidateAll: () => void;
 }) {
   const userId = useWakeel((s) => s.userId);
+  const lang = useWakeel((s) => s.lang);
+  const t = useT();
   const queryClient = useQueryClient();
   const [liveRun, setLiveRun] = useState<AutomationRun | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -152,17 +157,17 @@ export function AutomationsTab({
       setLiveRun(res.run);
       setExpanded(null);
       if (res.run.status === "DONE") {
-        toast.success("Automation executed", {
-          description: `${res.run.durationMs}ms · logged to the ledger.`,
+        toast.success(t.auto.toastOk, {
+          description: t.auto.toastOkDesc(res.run.durationMs),
         });
       } else {
-        toast.error("Automation run failed", {
-          description: "Upstream timeout — no data was affected. Check the log.",
+        toast.error(t.auto.toastFail, {
+          description: t.auto.toastFailDesc,
         });
       }
     },
     onError: (err: Error) =>
-      toast.error("Could not run automation", { description: err.message }),
+      toast.error(t.auto.toastErr, { description: err.message }),
   });
 
   const runningAutomation = runMutation.isPending
@@ -177,11 +182,11 @@ export function AutomationsTab({
   if (automations.length === 0) {
     return (
       <section className="flex flex-col gap-2.5">
-        <MonoLabel>AUTOMATIONS · 0</MonoLabel>
+        <MonoLabel>{t.auto.zero}</MonoLabel>
         <EmptyState
           art={NO_AUTOMATIONS_ART}
-          title="NO WORKFLOWS"
-          copy="This system's blueprint has no automations. Forge a richer system or edit its blueprint to add workflows."
+          title={t.auto.noWorkflowsT}
+          copy={t.auto.noWorkflowsC}
           className="py-8"
         />
       </section>
@@ -193,11 +198,11 @@ export function AutomationsTab({
       {/* workflow cards */}
       <div className="flex flex-col gap-2.5">
         <div className="flex items-baseline justify-between gap-2">
-          <MonoLabel>AUTOMATIONS · {automations.length}</MonoLabel>
+          <MonoLabel>{t.auto.count(automations.length)}</MonoLabel>
           <span className="font-mono text-[10px] text-muted-foreground/60">
             {runs.length > 0
-              ? `${successCount}/${runs.length} RUNS OK · SIMULATED`
-              : "SIMULATION MODE"}
+              ? t.auto.runsOk(successCount, runs.length)
+              : t.auto.simMode}
           </span>
         </div>
         {automations.map((a, i) => {
@@ -225,14 +230,10 @@ export function AutomationsTab({
                 </p>
                 <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60">
                   {isRunning
-                    ? "EXECUTING…"
+                    ? t.auto.executing
                     : lastRun
-                      ? `LAST RUN ${timeAgo(lastRun.createdAt)} · ${
-                          lastRun.status === "DONE"
-                            ? `${lastRun.durationMs}ms OK`
-                            : "FAILED"
-                        }`
-                      : "NEVER RUN"}
+                      ? t.auto.lastRun(timeAgo(lastRun.createdAt, lang), lastRun.status === "DONE", lastRun.durationMs)
+                      : t.auto.neverRun}
                 </p>
               </div>
               <Button
@@ -251,7 +252,7 @@ export function AutomationsTab({
                 ) : (
                   <Play className="size-3" />
                 )}
-                {isRunning ? "RUNNING" : "RUN"}
+                {isRunning ? t.auto.running : t.auto.run}
               </Button>
             </motion.div>
           );
@@ -270,10 +271,10 @@ export function AutomationsTab({
           >
             <div className="flex items-center justify-between gap-2">
               <MonoLabel gold className="text-[9px]">
-                <Zap className="mr-1 inline size-3" />
-                EXECUTION CONSOLE
+                <Zap className="me-1 inline size-3" />
+                {t.auto.console}
               </MonoLabel>
-              <span className="font-mono text-[10px] text-muted-foreground/60">
+              <span className="font-mono text-[10px] text-muted-foreground/60" dir="ltr">
                 {liveRun.trigger} · {liveRun.durationMs}MS
               </span>
             </div>
@@ -291,7 +292,7 @@ export function AutomationsTab({
       {runs.length > 0 && (
         <div className="flex flex-col gap-2">
           <MonoLabel className="text-muted-foreground/70">
-            RUN HISTORY · {runs.length}
+            {t.auto.history(runs.length)}
           </MonoLabel>
           <div className="wakeel-scrollbar flex max-h-72 flex-col overflow-y-auto rounded-lg border border-border">
             {runs.map((run, i) => {
@@ -318,11 +319,11 @@ export function AutomationsTab({
                     <span className="min-w-0 flex-1 truncate text-[12px] text-foreground/85">
                       {run.automation}
                     </span>
-                    <span className="hidden font-mono text-[10px] text-muted-foreground/60 sm:block">
+                    <span className="hidden font-mono text-[10px] text-muted-foreground/60 sm:block" dir="ltr">
                       {run.durationMs}ms
                     </span>
-                    <span className="font-mono text-[10px] text-muted-foreground/60">
-                      {timeAgo(run.createdAt)}
+                    <span className="font-mono text-[10px] text-muted-foreground/60" dir="ltr">
+                      {timeAgo(run.createdAt, lang)}
                     </span>
                     <ChevronDown
                       className={cn(
@@ -358,8 +359,7 @@ export function AutomationsTab({
       )}
 
       <p className="font-mono text-[10px] leading-relaxed text-muted-foreground/50">
-        WORKFLOW RUNS ARE SIMULATED AGAINST LIVE SYSTEM DATA — WAKEEL PLANS REAL
-        CONNECTORS FOR {systemName.toUpperCase()} ON YOUR ROADMAP.
+        {t.auto.footer(systemName)}
       </p>
     </section>
   );

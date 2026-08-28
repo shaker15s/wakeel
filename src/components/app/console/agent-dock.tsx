@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, Send, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { WakeelMark } from "@/components/app/logo";
 import { Button } from "@/components/ui/button";
@@ -14,14 +14,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { getChat, sendChat } from "@/lib/api-client";
+import { getChat, getSystems, sendChat } from "@/lib/api-client";
+import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 import { cn } from "@/lib/utils";
-
-const SUGGESTIONS = [
-  "What systems do I have?",
-  "Suggest an automation for my CRM",
-];
 
 function msgTime(iso: string) {
   try {
@@ -51,6 +47,7 @@ function TypingIndicator() {
 
 /** Shared chat body for the desktop panel and the mobile sheet. */
 function DockBody() {
+  const t = useT();
   const userId = useWakeel((s) => s.userId);
   const queryClient = useQueryClient();
   const listRef = useRef<HTMLDivElement>(null);
@@ -63,8 +60,28 @@ function DockBody() {
     enabled: !!userId,
     refetchInterval: 20_000,
   });
+  // workspace snapshot powers the proactive suggestions
+  const { data: systemsData } = useQuery({
+    queryKey: ["systems", userId],
+    queryFn: () => getSystems(userId!),
+    enabled: !!userId,
+  });
 
   const messages = data?.messages ?? [];
+  const systems = useMemo(() => systemsData?.systems ?? [], [systemsData]);
+
+  /** Proactive, workspace-aware suggestions (fed by real registry data). */
+  const suggestions = useMemo(() => {
+    const base = [t.dock.sugg1, t.dock.sugg2];
+    const withRecords = systems.find((s) => (s._count?.records ?? 0) > 0);
+    const forged = systems.find((s) => s.origin === "CREATED");
+    const extra = withRecords
+      ? t.dock.sugg3(withRecords.name)
+      : forged
+        ? t.dock.sugg3(forged.name)
+        : null;
+    return extra ? [base[0], extra, base[1]] : base;
+  }, [systems, t]);
 
   const mutation = useMutation({
     mutationFn: (message: string) => sendChat(userId!, message),
@@ -75,7 +92,7 @@ function DockBody() {
     },
     onError: (err: Error) => {
       setPendingMsg(null);
-      toast.error("Wakeel is unreachable", { description: err.message });
+      toast.error(t.dock.toastErr, { description: err.message });
     },
   });
 
@@ -100,7 +117,7 @@ function DockBody() {
         ref={listRef}
         className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
         role="log"
-        aria-label="Agent conversation"
+        aria-label={t.dock.logLabel}
       >
         {isLoading ? (
           <div className="flex flex-col gap-3">
@@ -124,19 +141,26 @@ function DockBody() {
    · · · · · · ·`}
             </pre>
             <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-foreground">
-              WAKEEL CLOCKED IN
+              {t.dock.clockedIn}
             </p>
             <p className="max-w-[240px] text-xs leading-relaxed text-muted-foreground">
-              Ask about your systems, records or next automation. It answers
-              with full workspace context.
+              {t.dock.emptyCopy}
             </p>
             <div className="flex flex-col gap-2 pt-1">
-              {SUGGESTIONS.map((s) => (
+              {suggestions.map((s, i) => (
                 <button
                   key={s}
                   onClick={() => send(s)}
-                  className="rounded-sm border border-gold/25 bg-gold/5 px-3 py-2 text-left font-mono text-[11px] text-gold transition-colors hover:bg-gold/15 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+                  className={cn(
+                    "flex items-center gap-2 rounded-sm border border-gold/25 bg-gold/5 px-3 py-2 text-start text-[12px] leading-snug text-gold transition-colors hover:bg-gold/15 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none",
+                    i === 0 ? "font-mono text-[11px]" : "font-mono text-[11px]"
+                  )}
                 >
+                  {i === 0 ? (
+                    <Sparkles className="size-3 shrink-0 text-gold/70" />
+                  ) : (
+                    <span className="size-3 shrink-0" aria-hidden />
+                  )}
                   {s}
                 </button>
               ))}
@@ -157,8 +181,8 @@ function DockBody() {
                   )}
                 >
                   <p className="mb-1 px-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground/70">
-                    {m.role === "USER" ? "OPERATOR" : "WAKEEL"} ·{" "}
-                    {msgTime(m.createdAt)}
+                    {m.role === "USER" ? t.dock.operator : t.dock.wakeel} ·{" "}
+                    <span dir="ltr">{msgTime(m.createdAt)}</span>
                   </p>
                   {m.role === "USER" ? (
                     <div className="rounded-md rounded-br-none border border-gold/25 bg-gold/10 px-3 py-2 text-[13px] leading-relaxed text-foreground">
@@ -182,7 +206,7 @@ function DockBody() {
                   className="flex max-w-[88%] flex-col self-end"
                 >
                   <p className="mb-1 px-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground/70">
-                    OPERATOR · SENDING…
+                    {t.dock.sending}
                   </p>
                   <div className="rounded-md rounded-br-none border border-gold/25 bg-gold/10 px-3 py-2 text-[13px] leading-relaxed text-foreground/70">
                     {pendingMsg}
@@ -206,22 +230,22 @@ function DockBody() {
         <Input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Message Wakeel…"
+          placeholder={t.dock.placeholder}
           disabled={mutation.isPending}
-          aria-label="Message Wakeel"
+          aria-label={t.dock.composerLabel}
           className="h-10 min-h-11 border-border bg-background focus-visible:ring-gold/50 md:min-h-0"
         />
         <Button
           type="submit"
           size="icon"
           disabled={mutation.isPending || !draft.trim()}
-          aria-label="Send message"
+          aria-label={t.dock.send}
           className="size-10 min-h-11 shrink-0 rounded-sm bg-primary text-primary-foreground hover:bg-gold-pale md:size-10 md:min-h-0"
         >
           {mutation.isPending ? (
             <Loader2 className="animate-spin" />
           ) : (
-            <Send className="size-4" />
+            <Send className="size-4 rtl:-scale-x-100" />
           )}
         </Button>
       </form>
@@ -230,23 +254,26 @@ function DockBody() {
 }
 
 export function AgentDockPanel() {
+  const t = useT();
+  const lang = useWakeel((s) => s.lang);
+  const slide = lang === "ar" ? -48 : 48;
   return (
     <motion.aside
-      initial={{ x: 48, opacity: 0 }}
+      initial={{ x: slide, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
-      exit={{ x: 48, opacity: 0 }}
+      exit={{ x: slide, opacity: 0 }}
       transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-      className="hidden w-[380px] shrink-0 flex-col border-l border-border bg-card/30 lg:flex"
-      aria-label="Wakeel agent dock"
+      className="hidden w-[380px] shrink-0 flex-col border-e border-border bg-card/30 lg:flex"
+      aria-label={t.dock.titleB}
     >
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
         <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-foreground">
-          WAKEEL <span className="text-muted-foreground">{"//"}</span>{" "}
-          <span className="text-gold">AGENT DOCK</span>
+          {t.dock.titleA} <span className="text-muted-foreground">{"//"}</span>{" "}
+          <span className="text-gold">{t.dock.titleB}</span>
         </p>
         <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-live">
           <span className="size-1.5 rounded-full bg-live shadow-[0_0_6px_rgba(62,207,142,0.9)]" />
-          ON DUTY
+          {t.dock.onDuty}
         </span>
       </div>
       <DockBody />
@@ -254,24 +281,26 @@ export function AgentDockPanel() {
   );
 }
 
-/** Mobile / tablet: full-width sheet from the right. */
+/** Mobile / tablet: full-width sheet (right in LTR, left in RTL). */
 export function AgentDockSheet() {
+  const t = useT();
+  const lang = useWakeel((s) => s.lang);
   const open = useWakeel((s) => s.agentDockOpen);
   const setOpen = useWakeel((s) => s.setAgentDockOpen);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent
-        side="right"
-        className="flex w-full flex-col gap-0 border-l border-border bg-card p-0 sm:max-w-md"
+        side={lang === "ar" ? "left" : "right"}
+        className="flex w-full flex-col gap-0 border-e border-border bg-card p-0 sm:max-w-md"
       >
         <SheetHeader className="flex-row items-center justify-between border-b border-border p-0 px-4 py-3">
           <SheetTitle className="font-mono text-[11px] uppercase tracking-[0.16em] text-foreground">
-            WAKEEL <span className="text-muted-foreground">{"//"}</span>{" "}
-            <span className="text-gold">AGENT DOCK</span>
+            {t.dock.titleA} <span className="text-muted-foreground">{"//"}</span>{" "}
+            <span className="text-gold">{t.dock.titleB}</span>
           </SheetTitle>
-          <span className="flex items-center gap-1.5 pr-8 font-mono text-[10px] uppercase tracking-[0.12em] text-live">
+          <span className="flex items-center gap-1.5 pe-8 font-mono text-[10px] uppercase tracking-[0.12em] text-live">
             <span className="size-1.5 rounded-full bg-live shadow-[0_0_6px_rgba(62,207,142,0.9)]" />
-            ON DUTY
+            {t.dock.onDuty}
           </span>
         </SheetHeader>
         <DockBody />

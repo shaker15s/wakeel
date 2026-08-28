@@ -360,6 +360,48 @@
   animation-play-state: paused;
 }
 
+/*
+ * ── Arabic / RTL typography layer ─────────────────────────────────────────
+ * Arabic is cursive: letter-spacing breaks the joining of glyphs, so in RTL
+ * mode all tracking utilities collapse to zero. Data islands marked with
+ * dir="ltr" (clocks, tables of numbers, logs, terminals) keep their mono
+ * rhythm. Body and display faces switch to IBM Plex Sans Arabic.
+ */
+html[dir="rtl"] body {
+  font-family: var(--font-arabic), var(--font-display), sans-serif;
+}
+html[dir="rtl"] .font-display {
+  font-family: var(--font-arabic), sans-serif;
+  letter-spacing: 0 !important;
+}
+html[dir="rtl"] .font-mono {
+  font-family: var(--font-arabic), var(--font-mono-data), sans-serif;
+}
+html[dir="rtl"] [dir="ltr"],
+html[dir="rtl"] [dir="ltr"] .font-mono,
+html[dir="rtl"] [dir="ltr"] .font-display {
+  font-family: var(--font-mono-data), monospace;
+}
+html[dir="rtl"] [class*="tracking-"]:not([dir="ltr"]):not([dir="ltr"] *) {
+  letter-spacing: 0 !important;
+}
+/* give Arabic display headings room to breathe */
+html[dir="rtl"] h1,
+html[dir="rtl"] h2 {
+  line-height: 1.25;
+}
+/* Arabic never takes italic — the script reads wrong when slanted */
+html[dir="rtl"] .italic {
+  font-style: normal;
+}
+
+/* the pre-formatted ASCII art stays Latin/LTR and mono */
+html[dir="rtl"] pre,
+html[dir="rtl"] kbd {
+  font-family: var(--font-mono-data), monospace;
+  direction: ltr;
+}
+
 /* respect operators who prefer reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .animate-ticker,

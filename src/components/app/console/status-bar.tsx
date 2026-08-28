@@ -16,7 +16,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { initialsOf } from "@/components/app/bits";
+import { LangToggle } from "@/components/app/lang-toggle";
 import { getSystems, getUser } from "@/lib/api-client";
+import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +35,7 @@ function LiveClock() {
     };
   }, []);
   return (
-    <span className="font-mono text-[11px] tabular-nums tracking-[0.1em] text-muted-foreground">
+    <span className="font-mono text-[11px] tabular-nums tracking-[0.1em] text-muted-foreground" dir="ltr">
       {now
         ? now.toLocaleTimeString("en-GB", {
             hour: "2-digit",
@@ -46,6 +48,7 @@ function LiveClock() {
 }
 
 export function StatusBar() {
+  const t = useT();
   const userId = useWakeel((s) => s.userId);
   const agentDockOpen = useWakeel((s) => s.agentDockOpen);
   const toggleAgentDock = useWakeel((s) => s.toggleAgentDock);
@@ -75,8 +78,8 @@ export function StatusBar() {
       // ignore storage failures
     }
     switchOperator();
-    toast("Operator switched", {
-      description: "Local identity cleared — back to the landing pad.",
+    toast(t.sb.switchedTitle, {
+      description: t.sb.switchedDesc,
     });
   };
 
@@ -86,11 +89,11 @@ export function StatusBar() {
       <div className="flex min-w-0 items-center gap-2.5">
         <WakeelMark className="size-5 shrink-0" />
         <span className="truncate font-mono text-xs tracking-[0.08em] text-foreground">
-          {user?.workspace ?? "WAKEEL"}
+          {user?.workspace ?? t.sb.fallbackWorkspace}
         </span>
         <span className="hidden truncate font-mono text-[11px] text-muted-foreground sm:inline">
           {"// "}
-          {user?.name ?? "operator"}
+          {user?.name ?? t.sb.fallbackName}
         </span>
       </div>
 
@@ -99,12 +102,12 @@ export function StatusBar() {
         <LiveClock />
         <span className="h-3.5 w-px bg-border" aria-hidden />
         <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-          SYSTEMS <span className="text-foreground">{systemCount}</span>
+          {t.sb.systems} <span className="text-foreground" dir="ltr">{systemCount}</span>
         </span>
         <span className="h-3.5 w-px bg-border" aria-hidden />
         <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-live">
           <span className="size-1.5 rounded-full bg-live shadow-[0_0_6px_rgba(62,207,142,0.9)]" />
-          OPERATIONAL
+          {t.sb.operational}
         </span>
       </div>
 
@@ -112,11 +115,11 @@ export function StatusBar() {
       <div className="flex items-center gap-2">
         <button
           onClick={() => setPaletteOpen(true)}
-          aria-label="Open command palette"
+          aria-label={t.sb.openPalette}
           className="hidden h-8 items-center gap-2 rounded-sm border border-border bg-transparent px-2.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-gold/40 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 md:flex"
         >
           <Search className="size-3.5" />
-          <span className="hidden xl:inline">Search</span>
+          <span className="hidden xl:inline">{t.sb.search}</span>
           <kbd className="rounded-[3px] border border-border bg-secondary px-1 font-mono text-[9px] tracking-[0.08em]">
             ⌘K
           </kbd>
@@ -132,14 +135,16 @@ export function StatusBar() {
           )}
         >
           <Bot className="size-3.5" />
-          <span className="hidden lg:inline">Agent dock</span>
+          <span className="hidden lg:inline">{t.sb.agentDock}</span>
         </Button>
+
+        <LangToggle className="hidden sm:flex" />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               className="flex min-h-11 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/60 md:min-h-0"
-              aria-label="Operator menu"
+              aria-label={t.sb.operatorMenu}
             >
               <Avatar className="size-7 border border-gold/30">
                 <AvatarFallback className="bg-secondary font-mono text-[10px] text-gold">
@@ -157,7 +162,7 @@ export function StatusBar() {
               onClick={handleSwitch}
               className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-secondary focus:text-gold"
             >
-              <LogOut className="size-3.5" /> Switch operator
+              <LogOut className="size-3.5" /> {t.sb.switchOp}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

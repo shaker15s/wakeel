@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import type { AiSystem, ConsoleTab, View } from "@/lib/api-client";
+import type { Lang } from "@/lib/i18n";
 
 export interface LastScanPayload {
   target: string;
@@ -12,6 +13,8 @@ export interface LastScanPayload {
 interface WakeelState {
   /** operator id, hydrated from localStorage key `wakeel:user` */
   userId: string | null;
+  /** UI language — persisted to localStorage key `wakeel:lang` */
+  lang: Lang;
   /** true once the localStorage hydration pass has run (client only) */
   hydrated: boolean;
   view: View;
@@ -29,6 +32,7 @@ interface WakeelState {
 
   hydrate: () => void;
   setUserId: (id: string | null, opts?: { persist?: boolean }) => void;
+  setLang: (lang: Lang) => void;
   setView: (view: View) => void;
   setConsoleTab: (tab: ConsoleTab) => void;
   setAgentDockOpen: (open: boolean) => void;
@@ -44,9 +48,19 @@ interface WakeelState {
 }
 
 const STORAGE_KEY = "wakeel:user";
+const LANG_KEY = "wakeel:lang";
+
+function readStoredLang(): Lang {
+  try {
+    return window.localStorage.getItem(LANG_KEY) === "ar" ? "ar" : "en";
+  } catch {
+    return "en";
+  }
+}
 
 export const useWakeel = create<WakeelState>((set) => ({
   userId: null,
+  lang: "en",
   hydrated: false,
   view: "landing",
   consoleTab: "overview",
@@ -59,15 +73,17 @@ export const useWakeel = create<WakeelState>((set) => ({
 
   hydrate: () => {
     let id: string | null = null;
+    let lang: Lang = "en";
     try {
       id = window.localStorage.getItem(STORAGE_KEY);
+      lang = readStoredLang();
     } catch {
       id = null;
     }
     if (id) {
-      set({ userId: id, view: "console", hydrated: true });
+      set({ userId: id, lang, view: "console", hydrated: true });
     } else {
-      set({ hydrated: true });
+      set({ lang, hydrated: true });
     }
   },
 
@@ -85,6 +101,15 @@ export const useWakeel = create<WakeelState>((set) => ({
       // storage unavailable (private mode) — session-only identity
     }
     set({ userId: id });
+  },
+
+  setLang: (lang) => {
+    try {
+      window.localStorage.setItem(LANG_KEY, lang);
+    } catch {
+      // storage unavailable — language stays session-only
+    }
+    set({ lang });
   },
 
   setView: (view) => set({ view }),

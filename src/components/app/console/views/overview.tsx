@@ -17,6 +17,7 @@ import {
 } from "@/components/app/bits";
 import { CountUp, MonoLabel } from "@/components/app/motion-bits";
 import { getActivity, getSystems, getUser, recordCount } from "@/lib/api-client";
+import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 
 const RADAR_ART = `   · · · · · · ·
@@ -25,14 +26,16 @@ const RADAR_ART = `   · · · · · · ·
  ·   ╰───────╯   ·
    · · · · · · ·`;
 
-function greetingFor(hour: number): string {
-  if (hour < 5) return "Burning the midnight oil";
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
+function greetingFor(hour: number, t: ReturnType<typeof useT>): string {
+  if (hour < 5) return t.ov.greetNight;
+  if (hour < 12) return t.ov.greetMorning;
+  if (hour < 18) return t.ov.greetAfternoon;
+  return t.ov.greetEvening;
 }
 
 export function OverviewView() {
+  const t = useT();
+  const lang = useWakeel((s) => s.lang);
   const userId = useWakeel((s) => s.userId);
   const setConsoleTab = useWakeel((s) => s.setConsoleTab);
   const openSystemDetail = useWakeel((s) => s.openSystemDetail);
@@ -62,20 +65,19 @@ export function OverviewView() {
   const activities = activityData?.activities ?? [];
 
   const hour = new Date().getHours();
-  const firstName = user?.name.split(" ")[0] ?? "operator";
+  const firstName = user?.name.split(" ")[0] ?? t.ov.operatorFallback;
   const dateLabel = new Date()
-    .toLocaleDateString("en-GB", {
-      weekday: "short",
+    .toLocaleDateString(lang === "ar" ? "ar-EG" : "en-GB", {
+      weekday: "long",
       day: "2-digit",
-      month: "short",
-    })
-    .toUpperCase();
+      month: "long",
+    });
 
   const statCards = [
-    { label: "SYSTEMS", value: stats?.systems ?? 0, seed: 3 },
-    { label: "RECORDS", value: stats?.records ?? 0, seed: 7 },
-    { label: "SCANS RUN", value: stats?.scans ?? 0, seed: 11 },
-    { label: "ACTIONS LOGGED", value: activities.length, seed: 5 },
+    { label: t.ov.statSystems, value: stats?.systems ?? 0, seed: 3 },
+    { label: t.ov.statRecords, value: stats?.records ?? 0, seed: 7 },
+    { label: t.ov.statScans, value: stats?.scans ?? 0, seed: 11 },
+    { label: t.ov.statActions, value: activities.length, seed: 5 },
   ];
 
   return (
@@ -83,15 +85,15 @@ export function OverviewView() {
       {/* header */}
       <div className="flex flex-col gap-1.5">
         <MonoLabel gold>
-          [ {dateLabel} · OPERATOR CONSOLE ]
+          [ <span dir="auto">{dateLabel}</span> · {t.ov.consoleTag} ]
         </MonoLabel>
         <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-          {greetingFor(hour)}, {firstName}.
+          {greetingFor(hour, t)}, {firstName}.
         </h1>
         <p className="text-sm text-muted-foreground">
           {stats && stats.systems > 0
-            ? `Wakeel is watching ${stats.systems} system${stats.systems === 1 ? "" : "s"} and ${stats.records} record${stats.records === 1 ? "" : "s"} in ${user?.workspace ?? "your workspace"}.`
-            : "Wakeel is on duty. Start with a discovery scan or forge your first system."}
+            ? t.ov.subWith(stats.systems, stats.records, user?.workspace ?? t.ov.wsFallback)
+            : t.ov.subEmpty}
         </p>
       </div>
 
@@ -127,28 +129,28 @@ export function OverviewView() {
           onClick={() => setConsoleTab("discovery")}
           className="h-11 bg-primary font-mono text-[11px] uppercase tracking-[0.14em] text-primary-foreground hover:bg-gold-pale"
         >
-          <Radar className="size-4" /> Run a discovery
+          <Radar className="size-4" /> {t.ov.runDiscovery}
         </Button>
         <Button
           onClick={() => setConsoleTab("forge")}
           variant="ghost"
           className="h-11 border border-border font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
-          <Hammer className="size-4" /> Forge a new system
+          <Hammer className="size-4" /> {t.ov.forgeNew}
         </Button>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
         {/* systems mini-grid */}
-        <section className="flex flex-col gap-3 xl:col-span-2" aria-label="Recent systems">
+        <section className="flex flex-col gap-3 xl:col-span-2" aria-label={t.ov.recentSystemsLabel}>
           <div className="flex items-center justify-between">
-            <MonoLabel>SYSTEMS · LATEST</MonoLabel>
+            <MonoLabel>{t.ov.latest}</MonoLabel>
             {systems.length > 0 && (
               <button
                 onClick={() => setConsoleTab("systems")}
                 className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.12em] text-gold transition-colors hover:text-gold-pale focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
               >
-                All systems <ArrowRight className="size-3" />
+                {t.ov.allSystems} <ArrowRight className="size-3 rtl:-scale-x-100" />
               </button>
             )}
           </div>
@@ -162,15 +164,15 @@ export function OverviewView() {
           ) : systems.length === 0 ? (
             <EmptyState
               art={RADAR_ART}
-              title="NO SYSTEMS YET"
-              copy="Run a discovery sweep to map what you already use, or forge a brand-new system from a sentence."
+              title={t.ov.noSystemsT}
+              copy={t.ov.noSystemsC}
             >
               <Button
                 onClick={() => setConsoleTab("discovery")}
                 size="sm"
                 className="bg-primary font-mono text-[10px] uppercase tracking-[0.14em] text-primary-foreground hover:bg-gold-pale"
               >
-                <Radar className="size-3.5" /> Run discovery
+                <Radar className="size-3.5" /> {t.ov.runDiscoverySm}
               </Button>
               <Button
                 onClick={() => setConsoleTab("forge")}
@@ -178,7 +180,7 @@ export function OverviewView() {
                 variant="ghost"
                 className="border border-border font-mono text-[10px] uppercase tracking-[0.14em]"
               >
-                <Hammer className="size-3.5" /> Forge
+                <Hammer className="size-3.5" /> {t.ov.forgeSm}
               </Button>
             </EmptyState>
           ) : (
@@ -210,8 +212,8 @@ export function OverviewView() {
                     </div>
                     <div className="flex items-center gap-2">
                       <HealthBar value={system.health} className="flex-1" />
-                      <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                        {count != null ? `${count} REC` : `${system.health}%`}
+                      <span className="font-mono text-[10px] tabular-nums text-muted-foreground" dir="ltr">
+                        {count != null ? `${count} ${t.ov.rec}` : `${system.health}%`}
                       </span>
                     </div>
                   </motion.button>
@@ -222,22 +224,22 @@ export function OverviewView() {
         </section>
 
         {/* recent activity feed */}
-        <section className="flex flex-col gap-3" aria-label="Recent activity">
+        <section className="flex flex-col gap-3" aria-label={t.ov.recentActivityLabel}>
           <div className="flex items-center justify-between">
-            <MonoLabel>RECENT ACTIVITY</MonoLabel>
+            <MonoLabel>{t.ov.recentActivity}</MonoLabel>
             {activities.length > 0 && (
               <button
                 onClick={() => setConsoleTab("activity")}
                 className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.12em] text-gold transition-colors hover:text-gold-pale focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
               >
-                Full ledger <ArrowRight className="size-3" />
+                {t.ov.fullLedger} <ArrowRight className="size-3 rtl:-scale-x-100" />
               </button>
             )}
           </div>
           <div className="rounded-lg border border-border bg-card p-2">
             {activities.length === 0 ? (
               <p className="px-3 py-8 text-center font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-                — LEDGER EMPTY —
+                {t.ov.ledgerEmpty}
               </p>
             ) : (
               <ul className="flex flex-col">
@@ -250,8 +252,8 @@ export function OverviewView() {
                     <span className="min-w-0 flex-1 truncate text-[13px] text-foreground/90">
                       {a.title}
                     </span>
-                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                      {timeAgo(a.createdAt)}
+                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground" dir="ltr">
+                      {timeAgo(a.createdAt, lang)}
                     </span>
                   </li>
                 ))}

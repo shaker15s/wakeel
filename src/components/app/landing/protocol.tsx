@@ -2,38 +2,28 @@
 
 import { motion } from "framer-motion";
 import { SectionHeading } from "@/components/app/motion-bits";
-
-const STEPS = [
-  {
-    num: "01",
-    title: "ONBOARD",
-    copy: "Register your operator profile. Name your workspace. Wakeel wakes up already knowing who you are and what you run — no integrations, no paperwork.",
-  },
-  {
-    num: "02",
-    title: "DISCOVER",
-    copy: "Point Wakeel at your company URL or describe your stack. Real web research maps every system you already run — CRM, ERP, storage, finance — with confidence scores.",
-  },
-  {
-    num: "03",
-    title: "FORGE",
-    copy: "Describe any system you need in plain language. Wakeel forges a working mini-app — typed entities, views, automations — materialized live in your workspace.",
-  },
-];
+import { useT } from "@/lib/i18n";
 
 export function Protocol() {
+  const t = useT();
+  const STEPS = [
+    { num: "01", title: t.protocol.s1t, copy: t.protocol.s1c },
+    { num: "02", title: t.protocol.s2t, copy: t.protocol.s2c },
+    { num: "03", title: t.protocol.s3t, copy: t.protocol.s3c },
+  ];
+
   return (
     <section id="protocol" className="relative scroll-mt-20 py-24 sm:py-32">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <SectionHeading
-          eyebrow="THE PROTOCOL"
+          eyebrow={t.protocol.eyebrow}
           title={
             <>
-              Three moves to your
-              <span className="text-gold"> first AI hire.</span>
+              {t.protocol.titleA}
+              <span className="text-gold">{t.protocol.titleB}</span>
             </>
           }
-          copy="No sales calls. No implementation year. Wakeel operates like a real employee — it learns your operation, then it works."
+          copy={t.protocol.copy}
         />
 
         <div className="mt-16 grid gap-5 md:grid-cols-3">
@@ -67,7 +57,7 @@ export function Protocol() {
               </div>
               <span
                 aria-hidden
-                className="mt-auto h-px w-10 bg-gradient-to-r from-gold/60 to-transparent"
+                className="mt-auto h-px w-10 bg-gradient-to-r from-gold/60 to-transparent rtl:bg-gradient-to-l"
               />
             </motion.article>
           ))}

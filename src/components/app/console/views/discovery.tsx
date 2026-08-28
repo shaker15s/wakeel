@@ -26,16 +26,9 @@ import {
   runScan,
 } from "@/lib/api-client";
 import type { AiSystem } from "@/lib/api-client";
+import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 import { cn } from "@/lib/utils";
-
-const SCAN_STAGES = [
-  "Resolving target…",
-  "Querying public web…",
-  "Extracting signals…",
-  "Classifying systems…",
-  "Scoring confidence…",
-];
 
 const RADAR_ART = `      ·  ·  ·  ·  ·
    ·    ╭─────╮    ·
@@ -70,14 +63,14 @@ function ScanProgress({ stages }: { stages: string[] }) {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.3 }}
             className={cn(
-              "font-mono text-[12px] tracking-[0.06em]",
+              "font-mono text-[12px] tracking-[0.06em] rtl:font-arabic",
               i === stages.length - 1 ? "text-gold" : "text-muted-foreground"
             )}
           >
-            <span className="mr-2 text-live">▸</span>
+            <span className="me-2 text-live">▸</span>
             {stage}
             {i === stages.length - 1 && (
-              <span className="animate-blink ml-1 text-gold">▌</span>
+              <span className="animate-blink ms-1 text-gold">▌</span>
             )}
           </motion.li>
         ))}
@@ -87,6 +80,7 @@ function ScanProgress({ stages }: { stages: string[] }) {
 }
 
 function DetectedSystemCard({ system, index }: { system: AiSystem; index: number }) {
+  const t = useT();
   const Icon = systemIcon(system.icon);
   const capabilities = parseCapabilities(system.capabilities).slice(0, 3);
   const confidence = system.confidence ?? system.health ?? 0;
@@ -123,8 +117,8 @@ function DetectedSystemCard({ system, index }: { system: AiSystem; index: number
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <MonoLabel className="text-[9px]">HEALTH</MonoLabel>
-          <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+          <MonoLabel className="text-[9px]">{t.disc.health}</MonoLabel>
+          <span className="font-mono text-[10px] tabular-nums text-muted-foreground" dir="ltr">
             {system.health}%
           </span>
         </div>
@@ -145,7 +139,7 @@ function DetectedSystemCard({ system, index }: { system: AiSystem; index: number
       )}
 
       {system.source && (
-        <p className="truncate font-mono text-[10px] text-muted-foreground/60">
+        <p className="truncate font-mono text-[10px] text-muted-foreground/60" dir="ltr">
           SRC · {system.source}
         </p>
       )}
@@ -154,6 +148,8 @@ function DetectedSystemCard({ system, index }: { system: AiSystem; index: number
 }
 
 export function DiscoveryView() {
+  const t = useT();
+  const lang = useWakeel((s) => s.lang);
   const userId = useWakeel((s) => s.userId);
   const lastScan = useWakeel((s) => s.lastScan);
   const setLastScan = useWakeel((s) => s.setLastScan);
@@ -178,7 +174,7 @@ export function DiscoveryView() {
     onSuccess: (data) => {
       const summary = parseScanSummary(
         data.scan?.result,
-        `Detected ${data.systems.length} systems for ${data.scan?.target ?? target}.`
+        t.disc.fallbackSummary(data.systems.length, data.scan?.target ?? target)
       );
       setLastScan({
         target: data.scan?.target ?? target,
@@ -189,14 +185,14 @@ export function DiscoveryView() {
       queryClient.invalidateQueries({ queryKey: ["scans", userId] });
       queryClient.invalidateQueries({ queryKey: ["activity", userId] });
       queryClient.invalidateQueries({ queryKey: ["user", userId] });
-      toast.success("Scan complete", {
-        description: `${data.systems.length} systems mapped for ${data.scan?.target ?? target}.`,
+      toast.success(t.disc.toastOk, {
+        description: t.disc.toastOkDesc(data.systems.length, data.scan?.target ?? target),
       });
       setTarget("");
       setNotes("");
     },
     onError: (err: Error) => {
-      toast.error("Scan failed", { description: err.message });
+      toast.error(t.disc.toastErr, { description: err.message });
     },
   });
 
@@ -204,16 +200,17 @@ export function DiscoveryView() {
   // (submit() seeds stage 1; the interval — an external timer — advances the rest)
   useEffect(() => {
     if (!mutation.isPending) return;
-    const t = setInterval(() => {
+    const SCAN_STAGES = [t.disc.stage1, t.disc.stage2, t.disc.stage3, t.disc.stage4, t.disc.stage5];
+    const timer = setInterval(() => {
       setStageCount((c) => Math.min(c + 1, SCAN_STAGES.length));
     }, 1400);
-    return () => clearInterval(t);
-  }, [mutation.isPending]);
+    return () => clearInterval(timer);
+  }, [mutation.isPending, t]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!target.trim()) {
-      setError("A target is required — URL or company name.");
+      setError(t.disc.errTarget);
       return;
     }
     setError(null);
@@ -221,16 +218,17 @@ export function DiscoveryView() {
     mutation.mutate();
   };
 
+  const scanStages = [t.disc.stage1, t.disc.stage2, t.disc.stage3, t.disc.stage4, t.disc.stage5];
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <MonoLabel gold>[ RECON ]</MonoLabel>
+        <MonoLabel gold>[ {t.disc.eyebrow} ]</MonoLabel>
         <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-          SYSTEM DISCOVERY
+          {t.disc.title}
         </h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Point Wakeel at a company URL or name. It runs real web research and
-          maps every system it can detect — then files them to your workspace.
+          {t.disc.sub}
         </p>
       </div>
 
@@ -245,11 +243,11 @@ export function DiscoveryView() {
             htmlFor="scan-target"
             className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground"
           >
-            Target *
+            {t.disc.target}
           </Label>
           <Input
             id="scan-target"
-            placeholder="acme.com or Acme Corporation"
+            placeholder={t.disc.targetPh}
             value={target}
             onChange={(e) => {
               setTarget(e.target.value);
@@ -269,11 +267,11 @@ export function DiscoveryView() {
             htmlFor="scan-notes"
             className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground"
           >
-            Notes for the sweep
+            {t.disc.notes}
           </Label>
           <Textarea
             id="scan-notes"
-            placeholder="Anything Wakeel should know — industry, tools you suspect, region…"
+            placeholder={t.disc.notesPh}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             disabled={mutation.isPending}
@@ -289,24 +287,24 @@ export function DiscoveryView() {
         >
           {mutation.isPending ? (
             <>
-              <Loader2 className="animate-spin" /> SCANNING…
+              <Loader2 className="animate-spin" /> {t.disc.scanning}
             </>
           ) : (
             <>
-              <Radar className="size-4" /> Run discovery scan
+              <Radar className="size-4" /> {t.disc.runScan}
             </>
           )}
         </Button>
       </form>
 
       {/* in-flight pipeline */}
-      {mutation.isPending && <ScanProgress stages={SCAN_STAGES.slice(0, stageCount)} />}
+      {mutation.isPending && <ScanProgress stages={scanStages.slice(0, stageCount)} />}
 
       {/* error inline */}
       {mutation.isError && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4">
           <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-destructive">
-            ⚠ SCAN ERROR
+            {t.disc.errTitle}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             {mutation.error.message}
@@ -323,7 +321,7 @@ export function DiscoveryView() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             className="flex flex-col gap-4"
-            aria-label="Latest scan results"
+            aria-label={t.disc.resultsLabel}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="font-mono text-[12px] text-gold">
@@ -335,7 +333,7 @@ export function DiscoveryView() {
                 onClick={() => setLastScan(null)}
                 className="h-8 gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
               >
-                <RotateCcw className="size-3" /> Clear
+                <RotateCcw className="size-3" /> {t.disc.clear}
               </Button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -351,15 +349,15 @@ export function DiscoveryView() {
       {!lastScan && !mutation.isPending && scans.length === 0 && (
         <EmptyState
           art={RADAR_ART}
-          title="NO SCANS ON RECORD"
-          copy="Run your first discovery sweep — Wakeel will map the stack you already run and flag what it can adopt."
+          title={t.disc.noScansT}
+          copy={t.disc.noScansC}
         />
       )}
 
       {/* scan history */}
       {scans.length > 0 && (
-        <section className="flex flex-col gap-3" aria-label="Scan history">
-          <MonoLabel>SCAN HISTORY</MonoLabel>
+        <section className="flex flex-col gap-3" aria-label={t.disc.historyLabel}>
+          <MonoLabel>{t.disc.history}</MonoLabel>
           <div className="overflow-hidden rounded-lg border border-border bg-card">
             {scans.map((scan, i) => (
               <div
@@ -373,10 +371,10 @@ export function DiscoveryView() {
                   {scan.target}
                 </span>
                 <span className="font-mono text-[11px] text-muted-foreground">
-                  {scan.systemsFound} found
+                  {scan.systemsFound} {t.disc.found}
                 </span>
-                <span className="font-mono text-[11px] text-muted-foreground">
-                  {timeAgo(scan.createdAt)}
+                <span className="font-mono text-[11px] text-muted-foreground" dir="ltr">
+                  {timeAgo(scan.createdAt, lang)}
                 </span>
                 <span
                   className={cn(

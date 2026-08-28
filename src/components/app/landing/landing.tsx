@@ -9,9 +9,11 @@ import { OpsTicker } from "@/components/app/landing/ticker";
 import { Protocol } from "@/components/app/landing/protocol";
 import { Button } from "@/components/ui/button";
 import { MonoLabel, Reveal } from "@/components/app/motion-bits";
+import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 
 export function Landing() {
+  const t = useT();
   const setOnboardingOpen = useWakeel((s) => s.setOnboardingOpen);
   const userId = useWakeel((s) => s.userId);
   const setView = useWakeel((s) => s.setView);
@@ -44,21 +46,20 @@ export function Landing() {
           <div className="bg-blueprint pointer-events-none absolute inset-0 opacity-50" aria-hidden />
           <div className="noise" aria-hidden />
           <Reveal className="relative mx-auto flex max-w-3xl flex-col items-center gap-6 px-4 text-center">
-            <MonoLabel gold>[ FINAL TRANSMISSION ]</MonoLabel>
+            <MonoLabel gold>[ {t.cta.eyebrow} ]</MonoLabel>
             <h2 className="font-display text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              Your operations deserve{" "}
-              <span className="text-glow text-gold">a professional.</span>
+              {t.cta.titleA}
+              <span className="text-glow text-gold">{t.cta.titleB}</span>
             </h2>
             <p className="max-w-xl text-base leading-relaxed text-muted-foreground">
-              Thirty seconds of onboarding. One operator profile. Wakeel starts
-              the discovery sweep the moment it clocks in.
+              {t.cta.copy}
             </p>
             <Button
               onClick={hire}
               size="lg"
               className="h-12 bg-primary px-8 font-mono text-[12px] uppercase tracking-[0.14em] text-primary-foreground shadow-[0_0_28px_-6px_rgba(232,180,74,0.5)] hover:bg-gold-pale"
             >
-              Hire your Wakeel
+              {t.cta.button}
             </Button>
           </Reveal>
         </section>

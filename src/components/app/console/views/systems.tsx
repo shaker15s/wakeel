@@ -15,6 +15,7 @@ import {
 } from "@/components/app/bits";
 import { MonoLabel } from "@/components/app/motion-bits";
 import { getSystems, parseCapabilities, recordCount } from "@/lib/api-client";
+import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 
 const GRID_ART = `  ┌───┐ ┌───┐ ┌───┐
@@ -23,6 +24,8 @@ const GRID_ART = `  ┌───┐ ┌───┐ ┌───┐
   NO SYSTEMS MAPPED`;
 
 export function SystemsView() {
+  const t = useT();
+  const lang = useWakeel((s) => s.lang);
   const userId = useWakeel((s) => s.userId);
   const openSystemDetail = useWakeel((s) => s.openSystemDetail);
   const setConsoleTab = useWakeel((s) => s.setConsoleTab);
@@ -41,14 +44,14 @@ export function SystemsView() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1.5">
-          <MonoLabel gold>[ REGISTRY ]</MonoLabel>
+          <MonoLabel gold>[ {t.sys.eyebrow} ]</MonoLabel>
           <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-            SYSTEMS
+            {t.sys.title}
           </h1>
           <p className="text-sm text-muted-foreground">
             {isLoading
-              ? "Loading your registry…"
-              : `${systems.length} system${systems.length === 1 ? "" : "s"} · ${activeCount} active · discovered and forged by Wakeel.`}
+              ? t.sys.loading
+              : t.sys.statsLine(systems.length, activeCount)}
           </p>
         </div>
       </div>
@@ -62,15 +65,15 @@ export function SystemsView() {
       ) : systems.length === 0 ? (
         <EmptyState
           art={GRID_ART}
-          title="REGISTRY EMPTY"
-          copy="Nothing in your workspace yet. Run a discovery sweep to adopt existing systems, or forge a brand-new one from a sentence."
+          title={t.sys.emptyT}
+          copy={t.sys.emptyC}
         >
           <Button
             onClick={() => setConsoleTab("discovery")}
             size="sm"
             className="bg-primary font-mono text-[10px] uppercase tracking-[0.14em] text-primary-foreground hover:bg-gold-pale"
           >
-            <Radar className="size-3.5" /> Run discovery
+            <Radar className="size-3.5" /> {t.sys.runDiscovery}
           </Button>
           <Button
             onClick={() => setConsoleTab("forge")}
@@ -78,7 +81,7 @@ export function SystemsView() {
             variant="ghost"
             className="border border-border font-mono text-[10px] uppercase tracking-[0.14em]"
           >
-            <Boxes className="size-3.5" /> Forge system
+            <Boxes className="size-3.5" /> {t.sys.forgeSystem}
           </Button>
         </EmptyState>
       ) : (
@@ -100,7 +103,7 @@ export function SystemsView() {
                 }}
                 whileHover={{ y: -4 }}
                 onClick={() => openSystemDetail(system.id)}
-                className={`group flex flex-col gap-3 rounded-lg border bg-card p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 ${
+                className={`group flex flex-col gap-3 rounded-lg border bg-card p-4 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 ${
                   isArchived
                     ? "border-border/60 opacity-60 hover:border-border"
                     : "border-border hover:border-gold/40"
@@ -133,19 +136,19 @@ export function SystemsView() {
                 <div className="mt-auto flex flex-col gap-2">
                   <div className="flex items-center gap-2">
                     <HealthBar value={system.health} className="flex-1" />
-                    <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                    <span className="font-mono text-[10px] tabular-nums text-muted-foreground" dir="ltr">
                       {system.health}%
                     </span>
                   </div>
                   <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/70">
-                    <span>
+                    <span dir="ltr">
                       {count != null
-                        ? `${count} RECORD${count === 1 ? "" : "S"}`
-                        : `${capabilities.length} CAPABILIT${capabilities.length === 1 ? "Y" : "IES"}`}
+                        ? t.sys.records(count)
+                        : t.sys.capabilities(capabilities.length)}
                     </span>
                     {isArchived && (
                       <span className="flex items-center gap-1">
-                        <Archive className="size-3" /> ARCHIVED
+                        <Archive className="size-3" /> {t.sys.archived}
                       </span>
                     )}
                   </div>

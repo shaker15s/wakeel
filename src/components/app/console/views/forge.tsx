@@ -24,21 +24,8 @@ import {
   recordCount,
 } from "@/lib/api-client";
 import type { AiSystem } from "@/lib/api-client";
+import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
-
-const FORGE_STAGES = [
-  "Parsing requirements…",
-  "Designing entities…",
-  "Wiring automations…",
-  "Materializing system…",
-];
-
-const PROMPT_EXAMPLES = [
-  "Pharmacy inventory system",
-  "Client onboarding tracker",
-  "Employee leave management",
-  "Warehouse shipment log",
-];
 
 const ANVIL_ART = `   ┌─────────────┐
    │  ▚▚  ▞▞  ▚▚ │
@@ -72,10 +59,10 @@ function ForgeProgress({ stages }: { stages: string[] }) {
                 : "font-mono text-[12px] tracking-[0.06em] text-muted-foreground"
             }
           >
-            <span className="mr-2 text-live">▸</span>
+            <span className="me-2 text-live">▸</span>
             {stage}
             {i === stages.length - 1 && (
-              <span className="animate-blink ml-1 text-gold">▌</span>
+              <span className="animate-blink ms-1 text-gold">▌</span>
             )}
           </motion.li>
         ))}
@@ -86,6 +73,7 @@ function ForgeProgress({ stages }: { stages: string[] }) {
 
 /** Reveal card for the freshly forged system + its blueprint. */
 function ForgeReveal({ system }: { system: AiSystem }) {
+  const t = useT();
   const openSystemDetail = useWakeel((s) => s.openSystemDetail);
   const Icon = systemIcon(system.icon);
   const blueprint = parseBlueprint(system.blueprint);
@@ -97,7 +85,7 @@ function ForgeReveal({ system }: { system: AiSystem }) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
       className="corner-frame flex flex-col gap-4 border border-gold/40 bg-card p-5"
-      aria-label="Forge result"
+      aria-label={t.forge.resultLabel}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -123,12 +111,12 @@ function ForgeReveal({ system }: { system: AiSystem }) {
           onClick={() => openSystemDetail(system.id)}
           className="h-11 min-h-11 gap-1.5 bg-primary font-mono text-[10px] uppercase tracking-[0.14em] text-primary-foreground hover:bg-gold-pale md:h-8 md:min-h-0"
         >
-          Open system <ArrowUpRight className="size-3.5" />
+          {t.forge.openSystem} <ArrowUpRight className="size-3.5 rtl:-scale-x-100" />
         </Button>
       </div>
 
       {blueprint.summary && (
-        <p className="border-l-2 border-gold/40 pl-3 text-[13px] leading-relaxed text-muted-foreground">
+        <p className="border-s-2 border-gold/40 ps-3 text-[13px] leading-relaxed text-muted-foreground">
           {blueprint.summary}
         </p>
       )}
@@ -136,7 +124,7 @@ function ForgeReveal({ system }: { system: AiSystem }) {
       {blueprint.fields.length > 0 && (
         <div className="flex flex-col gap-2">
           <MonoLabel className="text-[9px]">
-            ENTITY · {blueprint.fields.length} FIELDS
+            {t.forge.entityFields(blueprint.fields.length)}
           </MonoLabel>
           <div className="flex flex-wrap gap-1.5">
             {blueprint.fields.map((f) => (
@@ -145,7 +133,7 @@ function ForgeReveal({ system }: { system: AiSystem }) {
                 className="rounded-sm border border-border bg-secondary px-2 py-1 font-mono text-[10px] tracking-[0.06em] text-foreground/80"
               >
                 {f.label}
-                <span className="ml-1.5 text-gold/70">{f.type.toUpperCase()}</span>
+                <span className="ms-1.5 text-gold/70" dir="ltr">{f.type.toUpperCase()}</span>
               </span>
             ))}
           </div>
@@ -154,8 +142,8 @@ function ForgeReveal({ system }: { system: AiSystem }) {
 
       {blueprint.sampleRecords.length > 0 && (
         <div className="flex flex-col gap-2">
-          <MonoLabel className="text-[9px]">SAMPLE RECORDS</MonoLabel>
-          <div className="overflow-x-auto rounded-sm border border-border/70">
+          <MonoLabel className="text-[9px]">{t.forge.sampleRecords}</MonoLabel>
+          <div className="overflow-x-auto rounded-sm border border-border/70" dir="ltr">
             <table className="w-full min-w-[480px] border-collapse font-mono text-[11px]">
               <thead>
                 <tr className="border-b border-border/70 bg-secondary/60 text-left">
@@ -192,7 +180,7 @@ function ForgeReveal({ system }: { system: AiSystem }) {
 
       {blueprint.automations.length > 0 && (
         <div className="flex flex-col gap-2">
-          <MonoLabel className="text-[9px]">AUTOMATIONS</MonoLabel>
+          <MonoLabel className="text-[9px]">{t.forge.automations}</MonoLabel>
           <ul className="flex flex-col gap-1.5">
             {blueprint.automations.map((a, i) => (
               <li
@@ -211,6 +199,8 @@ function ForgeReveal({ system }: { system: AiSystem }) {
 }
 
 export function ForgeView() {
+  const t = useT();
+  const lang = useWakeel((s) => s.lang);
   const userId = useWakeel((s) => s.userId);
   const lastForge = useWakeel((s) => s.lastForge);
   const setLastForge = useWakeel((s) => s.setLastForge);
@@ -237,13 +227,13 @@ export function ForgeView() {
       queryClient.invalidateQueries({ queryKey: ["systems", userId] });
       queryClient.invalidateQueries({ queryKey: ["activity", userId] });
       queryClient.invalidateQueries({ queryKey: ["user", userId] });
-      toast.success("System forged", {
-        description: `${data.system.name} is live in your registry.`,
+      toast.success(t.forge.toastOk, {
+        description: t.forge.toastOkDesc(data.system.name),
       });
       setPrompt("");
     },
     onError: (err: Error) => {
-      toast.error("Forge failed", { description: err.message });
+      toast.error(t.forge.toastErr, { description: err.message });
     },
   });
 
@@ -251,16 +241,17 @@ export function ForgeView() {
   // (submit() seeds stage 1; the interval — an external timer — advances the rest)
   useEffect(() => {
     if (!mutation.isPending) return;
-    const t = setInterval(() => {
+    const FORGE_STAGES = [t.forge.stage1, t.forge.stage2, t.forge.stage3, t.forge.stage4];
+    const timer = setInterval(() => {
       setStageCount((c) => Math.min(c + 1, FORGE_STAGES.length));
     }, 1500);
-    return () => clearInterval(t);
-  }, [mutation.isPending]);
+    return () => clearInterval(timer);
+  }, [mutation.isPending, t]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (prompt.trim().length < 4) {
-      setError("Describe the system in at least a few words.");
+      setError(t.forge.errBrief);
       return;
     }
     setError(null);
@@ -268,17 +259,18 @@ export function ForgeView() {
     mutation.mutate();
   };
 
+  const forgeStages = [t.forge.stage1, t.forge.stage2, t.forge.stage3, t.forge.stage4];
+  const PROMPT_EXAMPLES = [t.forge.ex1, t.forge.ex2, t.forge.ex3, t.forge.ex4];
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <MonoLabel gold>[ FABRICATION ]</MonoLabel>
+        <MonoLabel gold>[ {t.forge.eyebrow} ]</MonoLabel>
         <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-          SYSTEM FORGE
+          {t.forge.title}
         </h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Describe any system you need in one sentence. Wakeel designs the
-          entities, wires automations and ships a working system — with sample
-          records — straight into your registry.
+          {t.forge.sub}
         </p>
       </div>
 
@@ -293,11 +285,11 @@ export function ForgeView() {
             htmlFor="forge-prompt"
             className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground"
           >
-            System brief *
+            {t.forge.brief}
           </label>
           <Textarea
             id="forge-prompt"
-            placeholder="e.g. An inventory system for my pharmacy with batches, expiry alerts and suppliers…"
+            placeholder={t.forge.briefPh}
             value={prompt}
             onChange={(e) => {
               setPrompt(e.target.value);
@@ -313,7 +305,7 @@ export function ForgeView() {
           )}
         </div>
 
-        <div className="flex flex-wrap gap-1.5" aria-label="Prompt examples">
+        <div className="flex flex-wrap gap-1.5" aria-label={t.forge.examplesLabel}>
           {PROMPT_EXAMPLES.map((example) => (
             <button
               key={example}
@@ -337,24 +329,24 @@ export function ForgeView() {
         >
           {mutation.isPending ? (
             <>
-              <Loader2 className="animate-spin" /> FORGING…
+              <Loader2 className="animate-spin" /> {t.forge.forging}
             </>
           ) : (
             <>
-              <Hammer className="size-4" /> Forge system
+              <Hammer className="size-4" /> {t.forge.forgeBtn}
             </>
           )}
         </Button>
       </form>
 
       {/* in-flight pipeline */}
-      {mutation.isPending && <ForgeProgress stages={FORGE_STAGES.slice(0, stageCount)} />}
+      {mutation.isPending && <ForgeProgress stages={forgeStages.slice(0, stageCount)} />}
 
       {/* inline error */}
       {mutation.isError && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4">
           <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-destructive">
-            ⚠ FORGE ERROR
+            {t.forge.errTitle}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">{mutation.error.message}</p>
         </div>
@@ -368,8 +360,8 @@ export function ForgeView() {
       </AnimatePresence>
 
       {/* recent forges */}
-      <section className="flex flex-col gap-3" aria-label="Recent forges">
-        <MonoLabel>RECENT FORGES</MonoLabel>
+      <section className="flex flex-col gap-3" aria-label={t.forge.recentLabel}>
+        <MonoLabel>{t.forge.recent}</MonoLabel>
         {isLoading ? (
           <div className="flex flex-col gap-2">
             {[0, 1, 2].map((i) => (
@@ -379,8 +371,8 @@ export function ForgeView() {
         ) : forged.length === 0 ? (
           <EmptyState
             art={ANVIL_ART}
-            title="FORGE COLD"
-            copy="No forged systems yet. Drop a brief above and Wakeel will fabricate your first one in seconds."
+            title={t.forge.coldT}
+            copy={t.forge.coldC}
           />
         ) : (
           <div className="overflow-hidden rounded-lg border border-border bg-card">
@@ -392,7 +384,7 @@ export function ForgeView() {
                   key={system.id}
                   onClick={() => useWakeel.getState().openSystemDetail(system.id)}
                   className={
-                    "flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-left transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60" +
+                    "flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-start transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60" +
                     (i > 0 ? " border-t border-border/60" : "")
                   }
                 >
@@ -401,11 +393,11 @@ export function ForgeView() {
                     {system.name}
                   </span>
                   <CategoryChip category={system.category} className="hidden sm:inline-flex" />
-                  <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-                    {count != null ? `${count} rec` : "—"}
+                  <span className="font-mono text-[11px] tabular-nums text-muted-foreground" dir="ltr">
+                    {count != null ? `${count} ${t.forge.rec}` : "—"}
                   </span>
-                  <span className="font-mono text-[11px] text-muted-foreground">
-                    {timeAgo(system.createdAt)}
+                  <span className="font-mono text-[11px] text-muted-foreground" dir="ltr">
+                    {timeAgo(system.createdAt, lang)}
                   </span>
                 </button>
               );

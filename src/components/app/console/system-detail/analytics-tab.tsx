@@ -6,6 +6,7 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import { EmptyState } from "@/components/app/bits";
 import { MonoLabel } from "@/components/app/motion-bits";
 import { parseRecordData } from "@/lib/api-client";
+import { useT } from "@/lib/i18n";
 import type { BlueprintField, SystemRecordDTO } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +57,7 @@ export function AnalyticsTab({
   records: SystemRecordDTO[];
   columns: BlueprintField[];
 }) {
+  const t = useT();
   const analytics = useMemo(() => {
     const now = Date.now();
     const startOfToday = new Date();
@@ -147,11 +149,11 @@ export function AnalyticsTab({
   if (records.length === 0) {
     return (
       <section className="flex flex-col gap-2.5">
-        <MonoLabel>ANALYTICS</MonoLabel>
+        <MonoLabel>{t.ana.label}</MonoLabel>
         <EmptyState
           art={EMPTY_ART}
-          title="NOT ENOUGH DATA"
-          copy={`Analytics come alive once ${systemName} has records. Add a few from the RECORDS tab.`}
+          title={t.ana.notEnoughT}
+          copy={t.ana.notEnoughC(systemName)}
           className="py-8"
         />
       </section>
@@ -165,8 +167,8 @@ export function AnalyticsTab({
     <section className="flex min-w-0 flex-col gap-5">
       {/* cadence stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatBlock value={String(records.length)} label="TOTAL RECORDS" />
-        <StatBlock value={String(analytics.last7)} label="WRITTEN · 7D" />
+        <StatBlock value={String(records.length)} label={t.ana.total} />
+        <StatBlock value={String(analytics.last7)} label={t.ana.written7} />
         <div className="flex min-w-[86px] flex-col gap-0.5">
           <span
             className={cn(
@@ -178,34 +180,34 @@ export function AnalyticsTab({
           >
             <DistIcon className="size-4" />
             {analytics.delta > 0 ? "+" : ""}
-            {analytics.delta}%
+            <span dir="ltr">{analytics.delta}%</span>
           </span>
-          <MonoLabel className="text-[9px]">7D VS PRIOR</MonoLabel>
+          <MonoLabel className="text-[9px]">{t.ana.vs7}</MonoLabel>
         </div>
         <StatBlock
-          value={analytics.oldest ? `${Math.max(1, Math.ceil((Date.now() - analytics.oldest.getTime()) / DAY_MS))}D` : "—"}
-          label="OLDEST RECORD"
+          value={analytics.oldest ? `${Math.max(1, Math.ceil((Date.now() - analytics.oldest.getTime()) / DAY_MS))}${t.ana.day}` : "—"}
+          label={t.ana.oldest}
         />
       </div>
 
       {/* 30-day write volume */}
       <div className="flex flex-col gap-2.5">
         <div className="flex items-baseline justify-between">
-          <MonoLabel>WRITE VOLUME · LAST 30 DAYS</MonoLabel>
-          <span className="font-mono text-[10px] text-muted-foreground/60">
-            PEAK {analytics.max}/DAY
+          <MonoLabel>{t.ana.writeVol}</MonoLabel>
+          <span className="font-mono text-[10px] text-muted-foreground/60" dir="ltr">
+            {t.ana.peak(analytics.max)}
           </span>
         </div>
-        <div className="rounded-lg border border-border bg-secondary/40 p-4">
+        <div className="rounded-lg border border-border bg-secondary/40 p-4" dir="ltr">
           <div
             className="flex h-24 items-end gap-[2px]"
             role="img"
-            aria-label="Records created per day over the last 30 days"
+            aria-label={t.ana.chartAria}
           >
             {analytics.buckets.map((b, i) => (
               <div
                 key={b.key}
-                title={`${b.label} · ${b.count} record${b.count === 1 ? "" : "s"}`}
+                title={t.ana.chartTip(b.label, b.count)}
                 className="group relative flex-1 rounded-t-[2px] transition-colors"
                 style={{ height: `${Math.max(6, (b.count / analytics.max) * 100)}%` }}
               >
@@ -235,7 +237,7 @@ export function AnalyticsTab({
       {/* field completion rates */}
       {analytics.fieldStats.length > 0 && (
         <div className="flex flex-col gap-2.5">
-          <MonoLabel>FIELD COMPLETION</MonoLabel>
+          <MonoLabel>{t.ana.fieldCompletion}</MonoLabel>
           <div className="flex flex-col gap-2 rounded-lg border border-border bg-secondary/40 p-4">
             {analytics.fieldStats.map((f, i) => (
               <motion.div
@@ -263,7 +265,7 @@ export function AnalyticsTab({
                     )}
                   />
                 </div>
-                <span className="w-16 shrink-0 text-right font-mono text-[10px] tabular-nums text-muted-foreground">
+                <span className="w-16 shrink-0 text-end font-mono text-[10px] tabular-nums text-muted-foreground" dir="ltr">
                   {f.filled}/{records.length} · {f.pct}%
                 </span>
               </motion.div>
@@ -276,9 +278,9 @@ export function AnalyticsTab({
       {analytics.catField && analytics.distribution.length > 0 && (
         <div className="flex flex-col gap-2.5">
           <div className="flex items-baseline justify-between">
-            <MonoLabel>DISTRIBUTION · {analytics.catField.label.toUpperCase()}</MonoLabel>
+            <MonoLabel>{t.ana.distribution(analytics.catField.label)}</MonoLabel>
             <span className="font-mono text-[10px] text-muted-foreground/60">
-              {analytics.distribution.length} VALUE{analytics.distribution.length === 1 ? "" : "S"}
+              {t.ana.values(analytics.distribution.length)}
             </span>
           </div>
           <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-secondary/40 p-4">
@@ -301,7 +303,7 @@ export function AnalyticsTab({
                       </span>
                     </motion.div>
                   </div>
-                  <span className="w-8 shrink-0 text-right font-mono text-[10px] tabular-nums text-muted-foreground">
+                  <span className="w-8 shrink-0 text-end font-mono text-[10px] tabular-nums text-muted-foreground">
                     {d.count}
                   </span>
                 </div>

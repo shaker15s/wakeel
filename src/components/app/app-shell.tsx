@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { DirectionProvider } from "@radix-ui/react-direction";
 import { AppShellSkeleton } from "@/components/app/app-shell-skeleton";
 import { Landing } from "@/components/app/landing/landing";
 import { Console } from "@/components/app/console/console";
@@ -29,14 +30,23 @@ export function AppShell() {
 
   const view = useWakeel((s) => s.view);
   const hydrated = useWakeel((s) => s.hydrated);
+  const lang = useWakeel((s) => s.lang);
   const hydrate = useWakeel((s) => s.hydrate);
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
 
+  // mirror the language onto <html> so the whole document flips (RTL/LTR)
+  useEffect(() => {
+    const dir = lang === "ar" ? "rtl" : "ltr";
+    document.documentElement.dir = dir;
+    document.documentElement.lang = lang;
+  }, [lang]);
+
   return (
     <QueryClientProvider client={queryClient}>
+      <DirectionProvider dir={lang === "ar" ? "rtl" : "ltr"}>
       <AnimatePresence mode="wait">
         {!hydrated ? (
           <motion.div
@@ -71,6 +81,7 @@ export function AppShell() {
         )}
       </AnimatePresence>
       <OnboardingDialog />
+      </DirectionProvider>
     </QueryClientProvider>
   );
 }

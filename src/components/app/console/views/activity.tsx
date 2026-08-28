@@ -9,6 +9,7 @@ import { EmptyState, StatusDot, TypeChip, timeAgo } from "@/components/app/bits"
 import { MonoLabel } from "@/components/app/motion-bits";
 import { getActivity } from "@/lib/api-client";
 import type { ActivityType } from "@/lib/api-client";
+import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -17,20 +18,13 @@ const LEDGER_ART = `  ┌──────────────────�
   │  no actions logged   │
   └──────────────────────┘`;
 
-const FILTERS: Array<"ALL" | ActivityType> = [
-  "ALL",
-  "SCAN",
-  "FORGE",
-  "RECORD",
-  "AUTOMATION",
-  "CHAT",
-  "STATUS",
-  "DELETE",
-];
+const FILTER_KEYS = ["ALL", "SCAN", "FORGE", "RECORD", "AUTOMATION", "CHAT", "STATUS", "DELETE"] as const;
 
 export function ActivityView() {
+  const t = useT();
+  const lang = useWakeel((s) => s.lang);
   const userId = useWakeel((s) => s.userId);
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]>("ALL");
+  const [filter, setFilter] = useState<(typeof FILTER_KEYS)[number]>("ALL");
 
   const { data, isLoading } = useQuery({
     queryKey: ["activity", userId],
@@ -47,29 +41,31 @@ export function ActivityView() {
 
   const availableTypes = useMemo(() => {
     const set = new Set(activities.map((a) => a.type));
-    return FILTERS.filter((f) => f === "ALL" || set.has(f));
+    return FILTER_KEYS.filter((f) => f === "ALL" || set.has(f));
   }, [activities]);
+
+  const filterLabel = (f: (typeof FILTER_KEYS)[number]) =>
+    f === "ALL" ? t.act.all : f;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1.5">
-          <MonoLabel gold>[ LEDGER ]</MonoLabel>
+          <MonoLabel gold>[ {t.act.eyebrow} ]</MonoLabel>
           <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-            ACTIVITY
+            {t.act.title}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Every action Wakeel takes on your behalf — timestamped, nothing hidden.
+            {t.act.sub}
           </p>
         </div>
         <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-          <span className="animate-blink size-1.5 rounded-full bg-live" /> LIVE ·
-          REFRESH 15S
+          <span className="animate-blink size-1.5 rounded-full bg-live" /> {t.act.live}
         </span>
       </div>
 
       {/* type filters */}
-      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Filter by type">
+      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label={t.act.filterLabel}>
         {availableTypes.map((type) => (
           <button
             key={type}
@@ -83,7 +79,7 @@ export function ActivityView() {
                 : "border-border bg-card text-muted-foreground hover:border-gold/30 hover:text-foreground"
             )}
           >
-            {type}
+            {filterLabel(type)}
           </button>
         ))}
       </div>
@@ -97,11 +93,11 @@ export function ActivityView() {
       ) : filtered.length === 0 ? (
         <EmptyState
           art={LEDGER_ART}
-          title={filter === "ALL" ? "LEDGER EMPTY" : `NO ${filter} EVENTS`}
+          title={filter === "ALL" ? t.act.emptyT : t.act.noEventsT(filterLabel(filter))}
           copy={
             filter === "ALL"
-              ? "Once you run a scan, forge a system or chat with Wakeel, every action lands here."
-              : "No events of this type yet — switch the filter or go do something worth logging."
+              ? t.act.emptyC
+              : t.act.noEventsC
           }
         >
           <ScrollText className="size-4 text-gold" />
@@ -120,7 +116,7 @@ export function ActivityView() {
               )}
             >
               {/* timestamp */}
-              <span className="w-16 shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/70">
+              <span className="w-16 shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/70" dir="ltr">
                 {new Date(activity.createdAt).toLocaleTimeString("en-GB", {
                   hour: "2-digit",
                   minute: "2-digit",
@@ -138,8 +134,8 @@ export function ActivityView() {
                 )}
               </div>
               <StatusDot status={activity.status} className="hidden sm:inline-flex" />
-              <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60">
-                {timeAgo(activity.createdAt)}
+              <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60" dir="ltr">
+                {timeAgo(activity.createdAt, lang)}
               </span>
             </motion.div>
           ))}

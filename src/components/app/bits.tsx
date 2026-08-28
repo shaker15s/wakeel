@@ -27,7 +27,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
+import { ar as arLocale, enUS } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import type { Lang } from "@/lib/i18n";
 import type { ActivityType, Origin, SystemStatus } from "@/lib/api-client";
 
 /* ------------------------------ icon mapping ------------------------------ */
@@ -349,11 +351,14 @@ export function EmptyState({
 
 /* --------------------------------- helpers -------------------------------- */
 
-export function timeAgo(iso: string): string {
+export function timeAgo(iso: string, lang: Lang = "en"): string {
   try {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "—";
-    return formatDistanceToNowStrict(d, { addSuffix: true });
+    return formatDistanceToNowStrict(d, {
+      addSuffix: true,
+      locale: lang === "ar" ? arLocale : enUS,
+    });
   } catch {
     return "—";
   }

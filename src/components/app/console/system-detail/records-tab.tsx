@@ -59,6 +59,7 @@ import {
   updateRecord,
 } from "@/lib/api-client";
 import type { BlueprintField, SystemRecordDTO } from "@/lib/api-client";
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 /* --------------------------- record value rendering ------------------------ */
@@ -118,6 +119,7 @@ function DynamicFieldInput({
   value: unknown;
   onChange: (v: unknown) => void;
 }) {
+  const t = useT();
   const type = field.type;
   if (type === "boolean" || type === "bool" || type === "checkbox") {
     return (
@@ -128,7 +130,7 @@ function DynamicFieldInput({
           aria-label={field.label}
         />
         <span className="font-mono text-[11px] text-muted-foreground">
-          {value ? "TRUE" : "FALSE"}
+          {value ? t.recs.true : t.recs.false}
         </span>
       </div>
     );
@@ -137,7 +139,7 @@ function DynamicFieldInput({
     return (
       <Select value={String(value ?? "")} onValueChange={onChange}>
         <SelectTrigger className="h-9 w-full border-border bg-secondary/60">
-          <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
+          <SelectValue placeholder={t.recs.selectField(field.label)} />
         </SelectTrigger>
         <SelectContent className="border-border bg-popover">
           {field.options.map((opt) => (
@@ -228,6 +230,7 @@ export function RecordsTab({
   columns: BlueprintField[];
   invalidateAll: () => void;
 }) {
+  const t = useT();
   const [addingRecord, setAddingRecord] = useState(false);
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -241,12 +244,12 @@ export function RecordsTab({
       invalidateAll();
       setAddingRecord(false);
       setDraft({});
-      toast.success("Record added", {
-        description: "Logged to the ledger and saved to your system.",
+      toast.success(t.recs.toastAddOk, {
+        description: t.recs.toastAddDesc,
       });
     },
     onError: (err: Error) =>
-      toast.error("Could not add record", { description: err.message }),
+      toast.error(t.recs.toastAddErr, { description: err.message }),
   });
 
   const removeRecord = useMutation({
@@ -258,10 +261,10 @@ export function RecordsTab({
         next.delete(removedId);
         return next;
       });
-      toast("Record deleted", { description: "Removed from the system." });
+      toast(t.recs.toastDelOk, { description: t.recs.toastDelDesc });
     },
     onError: (err: Error) =>
-      toast.error("Delete failed", { description: err.message }),
+      toast.error(t.recs.toastDelErr, { description: err.message }),
   });
 
   const editRecord = useMutation({
@@ -270,12 +273,12 @@ export function RecordsTab({
       invalidateAll();
       setEditingId(null);
       setEditDraft({});
-      toast.success("Record updated", {
-        description: "Changes saved and logged to the ledger.",
+      toast.success(t.recs.toastUpdOk, {
+        description: t.recs.toastUpdDesc,
       });
     },
     onError: (err: Error) =>
-      toast.error("Update failed", { description: err.message }),
+      toast.error(t.recs.toastUpdErr, { description: err.message }),
   });
 
   const bulkDelete = useMutation({
@@ -284,13 +287,13 @@ export function RecordsTab({
       invalidateAll();
       setSelected(new Set());
       setConfirmBulk(false);
-      toast.success(`${res.deleted} record${res.deleted === 1 ? "" : "s"} deleted`, {
-        description: "Bulk removal logged to the ledger.",
+      toast.success(t.recs.toastBulkOk(res.deleted), {
+        description: t.recs.toastBulkDesc,
       });
     },
     onError: (err: Error) => {
       setConfirmBulk(false);
-      toast.error("Bulk delete failed", { description: err.message });
+      toast.error(t.recs.toastBulkErr, { description: err.message });
     },
   });
 
@@ -313,7 +316,7 @@ export function RecordsTab({
   return (
     <section className="flex min-w-0 flex-col gap-2.5">
       <div className="flex items-center justify-between gap-2">
-        <MonoLabel>RECORDS · {records.length}</MonoLabel>
+        <MonoLabel>{t.recs.header(records.length)}</MonoLabel>
         <div className="flex items-center gap-1.5">
           <Button
             size="sm"
@@ -335,11 +338,11 @@ export function RecordsTab({
           >
             {addingRecord ? (
               <>
-                <X className="size-3" /> Cancel
+                <X className="size-3" /> {t.recs.cancel}
               </>
             ) : (
               <>
-                <Plus className="size-3" /> Add record
+                <Plus className="size-3" /> {t.recs.add}
               </>
             )}
           </Button>
@@ -357,9 +360,9 @@ export function RecordsTab({
           >
             <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gold/35 bg-gold/[0.05] px-3 py-2">
               <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-gold">
-                {selected.size} SELECTED
+                {t.recs.selected(selected.size)}
               </span>
-              <div className="ml-auto flex items-center gap-1.5">
+              <div className="ms-auto flex items-center gap-1.5">
                 <Button
                   size="sm"
                   variant="ghost"
@@ -368,7 +371,7 @@ export function RecordsTab({
                   }
                   className="h-7 gap-1.5 rounded-sm px-2 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:bg-secondary hover:text-foreground"
                 >
-                  <Download className="size-3" /> Export
+                  <Download className="size-3" /> {t.recs.export}
                 </Button>
                 <Button
                   size="sm"
@@ -376,7 +379,7 @@ export function RecordsTab({
                   onClick={() => setSelected(new Set())}
                   className="h-7 rounded-sm px-2 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:bg-secondary hover:text-foreground"
                 >
-                  Clear
+                  {t.recs.clearSel}
                 </Button>
                 <Button
                   size="sm"
@@ -390,7 +393,7 @@ export function RecordsTab({
                   ) : (
                     <Trash2 className="size-3" />
                   )}
-                  Delete
+                  {t.recs.deleteSel}
                 </Button>
               </div>
             </div>
@@ -428,8 +431,7 @@ export function RecordsTab({
               ))}
               {columns.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  This system has no blueprint fields — records
-                  would be empty objects.
+                  {t.recs.noFields}
                 </p>
               )}
               <div className="sm:col-span-2">
@@ -442,10 +444,10 @@ export function RecordsTab({
                 >
                   {addRecord.isPending ? (
                     <>
-                      <Loader2 className="animate-spin" /> SAVING…
+                      <Loader2 className="animate-spin" /> {t.recs.saving}
                     </>
                   ) : (
-                    "SAVE RECORD"
+                    t.recs.saveRecord
                   )}
                 </Button>
               </div>
@@ -472,7 +474,7 @@ export function RecordsTab({
               <div className="flex items-center gap-2 sm:col-span-2">
                 <Pencil className="size-3.5 text-gold" />
                 <MonoLabel gold className="text-[9px]">
-                  EDITING RECORD
+                  {t.recs.editing}
                 </MonoLabel>
               </div>
               {columns.map((f) => (
@@ -497,10 +499,10 @@ export function RecordsTab({
                 >
                   {editRecord.isPending ? (
                     <>
-                      <Loader2 className="animate-spin" /> SAVING…
+                      <Loader2 className="animate-spin" /> {t.recs.saving}
                     </>
                   ) : (
-                    "SAVE CHANGES"
+                    t.recs.saveChanges
                   )}
                 </Button>
                 <Button
@@ -512,7 +514,7 @@ export function RecordsTab({
                   }}
                   className="h-9 border border-border font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:bg-secondary hover:text-foreground"
                 >
-                  DISCARD
+                  {t.recs.discard}
                 </Button>
               </div>
             </div>
@@ -523,8 +525,8 @@ export function RecordsTab({
       {/* records table */}
       {records.length === 0 ? (
         <EmptyState
-          title="NO RECORDS YET"
-          copy="Add the first record to start filling this system."
+          title={t.recs.noRecordsT}
+          copy={t.recs.noRecordsC}
           className="py-8"
         />
       ) : (
@@ -538,7 +540,7 @@ export function RecordsTab({
                     indeterminate={someSelected}
                     onChange={toggleAll}
                     disabled={isArchived}
-                    label="Select all records"
+                    label={t.recs.selectAll}
                   />
                 </TableHead>
                 {columns.map((c) => (
@@ -572,7 +574,7 @@ export function RecordsTab({
                         checked={isSelected}
                         onChange={() => toggleRow(rec.id)}
                         disabled={isArchived}
-                        label={`Select record ${renderCellValue(data[columns[0]?.key ?? "id"])}`}
+                        label={t.recs.selectOne(renderCellValue(data[columns[0]?.key ?? "id"]))}
                       />
                     </TableCell>
                     {columns.map((c) => (
@@ -588,7 +590,7 @@ export function RecordsTab({
                         <DropdownMenuTrigger asChild>
                           <button
                             className="flex size-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-                            aria-label="Record actions"
+                            aria-label={t.recs.recActions}
                           >
                             <MoreHorizontal className="size-4" />
                           </button>
@@ -606,13 +608,13 @@ export function RecordsTab({
                             disabled={isArchived}
                             className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-gold/10 focus:text-gold"
                           >
-                            <Pencil className="size-3.5" /> Edit
+                            <Pencil className="size-3.5" /> {t.recs.edit}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => removeRecord.mutate(rec.id)}
                             className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-destructive/10 focus:text-destructive"
                           >
-                            <Trash2 className="size-3.5" /> Delete
+                            <Trash2 className="size-3.5" /> {t.common.delete}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -630,16 +632,15 @@ export function RecordsTab({
         <AlertDialogContent className="border-border bg-card">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display">
-              Delete {selected.size} record{selected.size === 1 ? "" : "s"}?
+              {t.recs.delBulkTitle(selected.size)}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              The selected records will be permanently removed from{" "}
-              {systemName}. This action cannot be undone.
+              {t.recs.delBulkDesc(systemName)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="font-mono text-[11px] uppercase tracking-[0.12em]">
-              Cancel
+              {t.common.cancel}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
@@ -651,7 +652,7 @@ export function RecordsTab({
               {bulkDelete.isPending ? (
                 <Loader2 className="animate-spin" />
               ) : (
-                "DELETE"
+                t.common.delete
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

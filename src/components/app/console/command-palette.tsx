@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/command";
 import { systemIcon } from "@/components/app/bits";
 import { getActivity, getSystems } from "@/lib/api-client";
+import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 import type { ConsoleTab } from "@/lib/api-client";
 
@@ -33,6 +34,7 @@ import type { ConsoleTab } from "@/lib/api-client";
  * Jump to views, open systems, and run quick actions — operator style.
  */
 export function CommandPalette() {
+  const t = useT();
   const open = useWakeel((s) => s.paletteOpen);
   const setOpen = useWakeel((s) => s.setPaletteOpen);
   const userId = useWakeel((s) => s.userId);
@@ -82,7 +84,7 @@ export function CommandPalette() {
       <div className="flex items-center gap-2.5 border-b border-border px-4">
         <Search className="size-4 shrink-0 text-gold" />
         <CommandInput
-          placeholder="Search systems, actions, activity…"
+          placeholder={t.palette.searchPh}
           className="border-none bg-transparent font-mono text-[13px] tracking-[0.04em] focus:ring-0"
         />
         <kbd className="shrink-0 rounded-sm border border-border bg-secondary px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
@@ -91,18 +93,18 @@ export function CommandPalette() {
       </div>
       <CommandList className="max-h-[420px]">
         <CommandEmpty className="py-8 text-center font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
-          NO MATCHES IN THE CONSOLE
+          {t.palette.noMatches}
         </CommandEmpty>
 
-        <CommandGroup heading="Views">
+        <CommandGroup heading={t.palette.views}>
           <CommandItem
             value="overview dashboard home"
             onSelect={() => goTab("overview")}
             className="gap-2.5 font-mono text-[12px]"
           >
             <LayoutDashboard className="size-4 text-muted-foreground" />
-            Overview
-            <CornerDownLeft className="ml-auto size-3 text-muted-foreground/50" />
+            {t.palette.vOverview}
+            <CornerDownLeft className="ms-auto size-3 text-muted-foreground/50" />
           </CommandItem>
           <CommandItem
             value="discovery scan recon"
@@ -110,8 +112,8 @@ export function CommandPalette() {
             className="gap-2.5 font-mono text-[12px]"
           >
             <Radar className="size-4 text-muted-foreground" />
-            Discovery — run a scan
-            <CornerDownLeft className="ml-auto size-3 text-muted-foreground/50" />
+            {t.palette.vDiscovery}
+            <CornerDownLeft className="ms-auto size-3 text-muted-foreground/50" />
           </CommandItem>
           <CommandItem
             value="systems registry"
@@ -119,8 +121,8 @@ export function CommandPalette() {
             className="gap-2.5 font-mono text-[12px]"
           >
             <Database className="size-4 text-muted-foreground" />
-            Systems registry
-            <CornerDownLeft className="ml-auto size-3 text-muted-foreground/50" />
+            {t.palette.vSystems}
+            <CornerDownLeft className="ms-auto size-3 text-muted-foreground/50" />
           </CommandItem>
           <CommandItem
             value="forge create new system build"
@@ -128,8 +130,8 @@ export function CommandPalette() {
             className="gap-2.5 font-mono text-[12px]"
           >
             <Hammer className="size-4 text-muted-foreground" />
-            Forge a system
-            <CornerDownLeft className="ml-auto size-3 text-muted-foreground/50" />
+            {t.palette.vForge}
+            <CornerDownLeft className="ms-auto size-3 text-muted-foreground/50" />
           </CommandItem>
           <CommandItem
             value="activity ledger log history"
@@ -137,15 +139,15 @@ export function CommandPalette() {
             className="gap-2.5 font-mono text-[12px]"
           >
             <ScrollText className="size-4 text-muted-foreground" />
-            Activity ledger
-            <CornerDownLeft className="ml-auto size-3 text-muted-foreground/50" />
+            {t.palette.vActivity}
+            <CornerDownLeft className="ms-auto size-3 text-muted-foreground/50" />
           </CommandItem>
         </CommandGroup>
 
         {systems.length > 0 && (
           <>
             <CommandSeparator className="bg-border" />
-            <CommandGroup heading="Open system">
+            <CommandGroup heading={t.palette.openSystem}>
               {systems.slice(0, 8).map((system) => {
                 const Icon = systemIcon(system.icon);
                 const records = system._count?.records ?? system.recordsCount;
@@ -160,7 +162,7 @@ export function CommandPalette() {
                   >
                     <Icon className="size-4 shrink-0 text-gold/70" />
                     <span className="truncate">{system.name}</span>
-                    <span className="ml-auto shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60">
+                    <span className="ms-auto shrink-0 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60" dir="ltr">
                       {system.origin.slice(0, 4)}
                       {typeof records === "number" ? ` · ${records}R` : ""}
                     </span>
@@ -172,7 +174,7 @@ export function CommandPalette() {
         )}
 
         <CommandSeparator className="bg-border" />
-        <CommandGroup heading="Agent">
+        <CommandGroup heading={t.palette.agent}>
           <CommandItem
             value="agent dock chat wakeel talk"
             onSelect={() =>
@@ -183,14 +185,14 @@ export function CommandPalette() {
             className="gap-2.5 font-mono text-[12px]"
           >
             <MessageSquare className="size-4 text-muted-foreground" />
-            Open agent dock
+            {t.palette.openDock}
           </CommandItem>
         </CommandGroup>
 
         {activities.length > 0 && (
           <>
             <CommandSeparator className="bg-border" />
-            <CommandGroup heading="Recent ledger">
+            <CommandGroup heading={t.palette.recent}>
               {activities.map((a) => (
                 <CommandItem
                   key={a.id}
@@ -202,7 +204,7 @@ export function CommandPalette() {
                   <span className="truncate text-muted-foreground">
                     {a.title}
                   </span>
-                  <span className="ml-auto shrink-0 rounded-sm border border-border px-1 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground/60">
+                  <span className="ms-auto shrink-0 rounded-sm border border-border px-1 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground/60">
                     {a.type}
                   </span>
                 </CommandItem>
@@ -213,15 +215,16 @@ export function CommandPalette() {
       </CommandList>
       <div className="flex items-center gap-4 border-t border-border px-4 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60">
         <span className="flex items-center gap-1.5">
-          <Boxes className="size-3" /> WAKEEL COMMAND DECK
+          <Boxes className="size-3" /> {t.palette.deck}
         </span>
-        <span className="ml-auto hidden sm:inline">
-          {systems.length} systems ·{" "}
-          {systems.reduce((n, s) => {
-            const c = s._count?.records ?? s.recordsCount;
-            return n + (typeof c === "number" ? c : 0);
-          }, 0)}{" "}
-          records
+        <span className="ms-auto hidden sm:inline" dir="ltr">
+          {t.palette.footerStats(
+            systems.length,
+            systems.reduce((n, s) => {
+              const c = s._count?.records ?? s.recordsCount;
+              return n + (typeof c === "number" ? c : 0);
+            }, 0)
+          )}
         </span>
       </div>
     </CommandDialog>

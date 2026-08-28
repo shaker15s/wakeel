@@ -23,9 +23,8 @@ import {
 } from "@/components/ui/select";
 import { MonoLabel } from "@/components/app/motion-bits";
 import { createUser } from "@/lib/api-client";
+import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
-
-const ROLES = ["Founder", "Operations", "Engineer", "Manager", "Other"] as const;
 
 interface FormState {
   name: string;
@@ -39,6 +38,7 @@ interface FormErrors {
 }
 
 export function OnboardingDialog() {
+  const t = useT();
   const open = useWakeel((s) => s.onboardingOpen);
   const setOpen = useWakeel((s) => s.setOnboardingOpen);
   const setUserId = useWakeel((s) => s.setUserId);
@@ -58,21 +58,20 @@ export function OnboardingDialog() {
       setUserId(data.user.id); // persists to localStorage wakeel:user
       setView("console");
       setOpen(false);
-      toast.success("Operator activated", {
-        description: `Welcome aboard, ${data.user.name.split(" ")[0]} — your console is live.`,
+      toast.success(t.onb.toastOk, {
+        description: t.onb.toastOkDesc(data.user.name.split(" ")[0]),
       });
     },
     onError: (err: Error) => {
-      toast.error("Activation failed", { description: err.message });
+      toast.error(t.onb.toastErr, { description: err.message });
     },
   });
 
   const validate = (): boolean => {
     const next: FormErrors = {};
-    if (!form.name.trim()) next.name = "Full name is required.";
-    else if (form.name.trim().length < 2) next.name = "That name is too short.";
-    if (!form.workspace.trim())
-      next.workspace = "Workspace name is required.";
+    if (!form.name.trim()) next.name = t.onb.errName;
+    else if (form.name.trim().length < 2) next.name = t.onb.errShort;
+    if (!form.workspace.trim()) next.workspace = t.onb.errWs;
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -98,27 +97,26 @@ export function OnboardingDialog() {
         <div className="relative overflow-hidden">
           <div className="bg-blueprint pointer-events-none absolute inset-0 opacity-60" />
           <div className="relative p-6 sm:p-8">
-            <DialogHeader className="gap-3 text-left">
+            <DialogHeader className="gap-3 text-start">
               <MonoLabel gold className="animate-blink">
-                ● NEW OPERATOR REGISTRATION
+                {t.onb.badge}
               </MonoLabel>
               <DialogTitle className="font-display text-2xl font-bold tracking-tight">
-                Activate your Wakeel
+                {t.onb.title}
               </DialogTitle>
               <DialogDescription>
-                Register an operator profile. Everything — systems, records,
-                activity — is scoped to you.
+                {t.onb.desc}
               </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={submit} className="mt-6 flex flex-col gap-4" noValidate>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="op-name" className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                  Full name *
+                  {t.onb.fullName}
                 </Label>
                 <Input
                   id="op-name"
-                  placeholder="e.g. Layla Hassan"
+                  placeholder={t.onb.namePh}
                   autoComplete="name"
                   value={form.name}
                   onChange={(e) => {
@@ -137,11 +135,11 @@ export function OnboardingDialog() {
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="op-workspace" className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                  Workspace name *
+                  {t.onb.workspace}
                 </Label>
                 <Input
                   id="op-workspace"
-                  placeholder="e.g. Nova Retail"
+                  placeholder={t.onb.wsPh}
                   value={form.workspace}
                   onChange={(e) => {
                     setForm((f) => ({ ...f, workspace: e.target.value }));
@@ -160,17 +158,17 @@ export function OnboardingDialog() {
 
               <div className="flex flex-col gap-1.5">
                 <Label className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                  Role
+                  {t.onb.role}
                 </Label>
                 <Select
                   value={form.role}
                   onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}
                 >
                   <SelectTrigger className="h-10 w-full border-border bg-secondary/60 data-[placeholder]:text-muted-foreground">
-                    <SelectValue placeholder="Select role (optional)" />
+                    <SelectValue placeholder={t.onb.rolePh} />
                   </SelectTrigger>
                   <SelectContent className="border-border bg-popover">
-                    {ROLES.map((role) => (
+                    {t.onb.roles.map((role) => (
                       <SelectItem key={role} value={role}>
                         {role}
                       </SelectItem>
@@ -186,15 +184,15 @@ export function OnboardingDialog() {
               >
                 {mutation.isPending ? (
                   <>
-                    <Loader2 className="animate-spin" /> ACTIVATING…
+                    <Loader2 className="animate-spin" /> {t.onb.activating}
                   </>
                 ) : (
-                  "ACTIVATE WAKEEL"
+                  t.onb.activate
                 )}
               </Button>
 
               <p className="text-center font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
-                Stored locally · wakeel:user · no email required
+                {t.onb.storedNote}
               </p>
             </form>
           </div>

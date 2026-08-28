@@ -47,6 +47,7 @@ import {
 } from "@/lib/api-client";
 import type { SystemRecordDTO } from "@/lib/api-client";
 import { useWakeel } from "@/lib/store";
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { RecordsTab } from "./system-detail/records-tab";
 import { AutomationsTab } from "./system-detail/automations-tab";
@@ -54,16 +55,11 @@ import { AnalyticsTab } from "./system-detail/analytics-tab";
 
 type DetailTab = "overview" | "records" | "automations" | "analytics";
 
-const TABS: { id: DetailTab; label: string; icon: typeof Table2 }[] = [
-  { id: "overview", label: "OVERVIEW", icon: Table2 },
-  { id: "records", label: "RECORDS", icon: Table2 },
-  { id: "automations", label: "AUTOMATIONS", icon: Workflow },
-  { id: "analytics", label: "ANALYTICS", icon: ChartColumn },
-];
-
 /* ------------------------------ main dialog -------------------------------- */
 
 export function SystemDetailDialog() {
+  const t = useT();
+  const lang = useWakeel((s) => s.lang);
   const systemId = useWakeel((s) => s.systemDetailId);
   const close = useWakeel((s) => s.closeSystemDetail);
   const userId = useWakeel((s) => s.userId);
@@ -119,10 +115,10 @@ export function SystemDetailDialog() {
       updateSystem(systemId!, { status }),
     onSuccess: (_data, status) => {
       invalidateAll();
-      toast.success(status === "ARCHIVED" ? "System archived" : "System restored");
+      toast.success(status === "ARCHIVED" ? t.detail.toastArchived : t.detail.toastRestored);
     },
     onError: (err: Error) =>
-      toast.error("Update failed", { description: err.message }),
+      toast.error(t.detail.toastUpdErr, { description: err.message }),
   });
 
   const destroySystem = useMutation({
@@ -130,12 +126,12 @@ export function SystemDetailDialog() {
     onSuccess: () => {
       invalidateAll();
       close();
-      toast.success("System deleted", {
-        description: "It and all of its records are gone. Logged to the ledger.",
+      toast.success(t.detail.toastDelOk, {
+        description: t.detail.toastDelDesc,
       });
     },
     onError: (err: Error) =>
-      toast.error("Delete failed", { description: err.message }),
+      toast.error(t.detail.toastDelErr, { description: err.message }),
   });
 
   // scroll the dialog body so the tab bar is at the top whenever the tab changes
@@ -164,6 +160,7 @@ export function SystemDetailDialog() {
       >
         {isLoading ? (
           <div className="flex flex-col gap-4 py-4">
+            <DialogTitle className="sr-only">{t.detail.loadingTitle}</DialogTitle>
             <div className="flex items-center gap-3">
               <Skeleton className="size-12 rounded-sm" />
               <div className="flex flex-col gap-2">
@@ -176,14 +173,15 @@ export function SystemDetailDialog() {
           </div>
         ) : isError || !system ? (
           <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <DialogTitle className="sr-only">{t.detail.unavailTitle}</DialogTitle>
             <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-destructive">
-              ⚠ SYSTEM UNAVAILABLE
+              ⚠ {t.detail.unavailTitle}
             </p>
             <p className="text-sm text-muted-foreground">
-              {error?.message ?? "This system could not be loaded."}
+              {error?.message ?? t.detail.unavailFallback}
             </p>
             <Button variant="ghost" size="sm" onClick={close} className="font-mono text-[11px] uppercase tracking-[0.12em]">
-              Close
+              {t.common.close}
             </Button>
           </div>
         ) : (
@@ -193,7 +191,7 @@ export function SystemDetailDialog() {
             return (
               <div className="flex min-w-0 flex-col gap-5">
                 {/* header */}
-                <div className="flex items-start gap-3.5 pr-8">
+                <div className="flex items-start gap-3.5 pe-8">
                   <span className="flex size-12 shrink-0 items-center justify-center rounded-sm border border-gold/25 bg-gold/5 text-gold">
                     <Icon className="size-6" />
                   </span>
@@ -215,7 +213,7 @@ export function SystemDetailDialog() {
                       </p>
                     )}
                     {system.source && (
-                      <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground/60">
+                      <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground/60" dir="ltr">
                         SRC · {system.source}
                       </p>
                     )}
@@ -227,23 +225,25 @@ export function SystemDetailDialog() {
                   ref={tabBarRef}
                   className="sticky top-0 z-10 -mx-6 border-b border-border bg-card/95 px-6 backdrop-blur-sm"
                   role="tablist"
-                  aria-label="System detail sections"
+                  aria-label={t.detail.tablistLabel}
                 >
                   <div className="wakeel-scrollbar flex gap-1 overflow-x-auto">
-                    {TABS.map((t) => {
-                      const count =
-                        t.id === "records"
-                          ? records.length
-                          : t.id === "automations"
-                            ? blueprint.automations.length
-                            : undefined;
-                      const active = tab === t.id;
+                    {(
+                      [
+                        { id: "overview", label: t.detail.tabOverview, icon: Table2 },
+                        { id: "records", label: t.detail.tabRecords, icon: Table2, count: records.length },
+                        { id: "automations", label: t.detail.tabAutomations, icon: Workflow, count: blueprint.automations.length },
+                        { id: "analytics", label: t.detail.tabAnalytics, icon: ChartColumn },
+                      ] as { id: DetailTab; label: string; icon: typeof Table2; count?: number }[]
+                    ).map((tb) => {
+                      const count = tb.count !== undefined && tb.count > 0 ? tb.count : undefined;
+                      const active = tab === tb.id;
                       return (
                         <button
-                          key={t.id}
+                          key={tb.id}
                           role="tab"
                           aria-selected={active}
-                          onClick={() => setTab(t.id)}
+                          onClick={() => setTab(tb.id)}
                           className={cn(
                             "relative flex shrink-0 items-center gap-1.5 px-3 py-2.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors",
                             "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gold/50",
@@ -252,9 +252,9 @@ export function SystemDetailDialog() {
                               : "text-muted-foreground hover:text-foreground"
                           )}
                         >
-                          <t.icon className="size-3.5" />
-                          {t.label}
-                          {count !== undefined && count > 0 && (
+                          <tb.icon className="size-3.5" />
+                          {tb.label}
+                          {count !== undefined && (
                             <span
                               className={cn(
                                 "rounded-sm px-1 py-px text-[9px] tabular-nums",
@@ -294,7 +294,7 @@ export function SystemDetailDialog() {
                       <div className="flex min-w-0 flex-col gap-5">
                         {/* mini dashboard */}
                         <section className="flex flex-col gap-2.5">
-                          <MonoLabel>PULSE · LAST 14 DAYS</MonoLabel>
+                          <MonoLabel>{t.detail.pulse}</MonoLabel>
                           <div className="grid gap-3 rounded-lg border border-border bg-secondary/40 p-4 sm:grid-cols-[1fr_auto]">
                             <div className="flex min-w-0 flex-col justify-between gap-3">
                               <div className="flex flex-wrap gap-x-6 gap-y-2">
@@ -302,7 +302,7 @@ export function SystemDetailDialog() {
                                   <span className="font-display text-xl font-bold tabular-nums text-foreground">
                                     {records.length}
                                   </span>
-                                  <MonoLabel className="text-[9px]">RECORDS</MonoLabel>
+                                  <MonoLabel className="text-[9px]">{t.detail.recordsStat}</MonoLabel>
                                 </div>
                                 <div className="flex flex-col">
                                   <span className="font-mono text-[13px] font-medium text-foreground">
@@ -310,23 +310,24 @@ export function SystemDetailDialog() {
                                       ? timeAgo(
                                         records.reduce((a, b) =>
                                           a.updatedAt > b.updatedAt ? a : b
-                                        ).updatedAt
+                                        ).updatedAt,
+                                        lang
                                       )
                                       : "—"}
                                   </span>
-                                  <MonoLabel className="text-[9px]">LAST WRITE</MonoLabel>
+                                  <MonoLabel className="text-[9px]">{t.detail.lastWrite}</MonoLabel>
                                 </div>
                                 <div className="flex flex-col">
                                   <span className="font-mono text-[13px] font-medium text-foreground">
                                     {blueprint.fields.length || "—"}
                                   </span>
-                                  <MonoLabel className="text-[9px]">TYPED FIELDS</MonoLabel>
+                                  <MonoLabel className="text-[9px]">{t.detail.typedFields}</MonoLabel>
                                 </div>
                               </div>
                               <RecordsPulse records={records} />
                             </div>
                             <div
-                              className="hidden flex-col items-end justify-center border-l border-border/60 pl-4 sm:flex"
+                              className="hidden flex-col items-end justify-center border-s border-border/60 ps-4 sm:flex"
                               aria-hidden
                             >
                               <ChartColumn className="size-5 text-gold/50" />
@@ -336,10 +337,10 @@ export function SystemDetailDialog() {
 
                         {/* blueprint summary */}
                         <section className="flex flex-col gap-2.5">
-                          <MonoLabel>BLUEPRINT · ENTITY FIELDS</MonoLabel>
+                          <MonoLabel>{t.detail.blueprint}</MonoLabel>
                           {blueprint.fields.length === 0 ? (
                             <p className="text-sm text-muted-foreground">
-                              No typed fields were specified for this system.
+                              {t.detail.noFields}
                             </p>
                           ) : (
                             <div className="overflow-hidden rounded-lg border border-border">
@@ -369,7 +370,7 @@ export function SystemDetailDialog() {
 
                           {blueprint.automations.length > 0 && (
                             <div className="flex flex-col gap-1.5">
-                              <MonoLabel className="mt-1.5">AUTOMATIONS</MonoLabel>
+                              <MonoLabel className="mt-1.5">{t.detail.automations}</MonoLabel>
                               <ul className="flex flex-col gap-1">
                                 {blueprint.automations.slice(0, 3).map((a) => (
                                   <li
@@ -387,7 +388,7 @@ export function SystemDetailDialog() {
                                   onClick={() => setTab("automations")}
                                   className="self-start font-mono text-[10px] uppercase tracking-[0.14em] text-gold underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gold/50"
                                 >
-                                  +{blueprint.automations.length - 3} MORE · OPEN AUTOMATIONS →
+                                  {t.detail.moreAuto(blueprint.automations.length - 3)}
                                 </button>
                               )}
                             </div>
@@ -430,7 +431,7 @@ export function SystemDetailDialog() {
                 {/* danger zone */}
                 <section className="flex flex-col gap-2 border-t border-border pt-4">
                   <MonoLabel className="text-muted-foreground/70">
-                    DANGER ZONE
+                    {t.detail.danger}
                   </MonoLabel>
                   <div className="flex flex-wrap gap-2">
                     {isArchived ? (
@@ -446,7 +447,7 @@ export function SystemDetailDialog() {
                         ) : (
                           <ArchiveRestore className="size-3.5" />
                         )}
-                        Restore system
+                        {t.detail.restore}
                       </Button>
                     ) : (
                       <Button
@@ -461,7 +462,7 @@ export function SystemDetailDialog() {
                         ) : (
                           <Archive className="size-3.5" />
                         )}
-                        Archive system
+                        {t.detail.archive}
                       </Button>
                     )}
                     <Button
@@ -471,10 +472,10 @@ export function SystemDetailDialog() {
                       disabled={destroySystem.isPending}
                       className="h-9 gap-1.5 border border-destructive/40 font-mono text-[10px] uppercase tracking-[0.12em] text-destructive hover:bg-destructive/10"
                     >
-                      <Trash2 className="size-3.5" /> Delete system
+                      <Trash2 className="size-3.5" /> {t.detail.delete}
                     </Button>
-                    <span className="ml-auto self-center font-mono text-[10px] text-muted-foreground/60">
-                      CREATED {timeAgo(system.createdAt)}
+                    <span className="ms-auto self-center font-mono text-[10px] text-muted-foreground/60" dir="ltr">
+                      {t.detail.created} {timeAgo(system.createdAt, lang)}
                     </span>
                   </div>
                 </section>
@@ -489,16 +490,15 @@ export function SystemDetailDialog() {
         <AlertDialogContent className="border-border bg-card">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-display">
-              Delete this system?
+              {t.detail.delTitle}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {system?.name} and all of its records will be permanently
-              removed. This action cannot be undone.
+              {t.detail.delDesc(system?.name)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="font-mono text-[11px] uppercase tracking-[0.12em]">
-              Cancel
+              {t.common.cancel}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
@@ -511,7 +511,7 @@ export function SystemDetailDialog() {
               {destroySystem.isPending ? (
                 <Loader2 className="animate-spin" />
               ) : (
-                "DELETE"
+                t.common.delete
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -525,6 +525,7 @@ export function SystemDetailDialog() {
 
 /** Tiny gold bar chart: records created per day over the last 14 days. */
 function RecordsPulse({ records }: { records: SystemRecordDTO[] }) {
+  const t = useT();
   const days = useMemo(() => {
     const buckets = new Map<string, number>();
     for (let i = 13; i >= 0; i--) {
@@ -541,16 +542,16 @@ function RecordsPulse({ records }: { records: SystemRecordDTO[] }) {
 
   const max = Math.max(1, ...days.map(([, n]) => n));
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1" dir="ltr">
       <div
         className="flex h-12 items-end gap-[3px]"
         role="img"
-        aria-label="Records created per day, last 14 days"
+        aria-label={t.detail.pulseAria}
       >
         {days.map(([day, n]) => (
           <div
             key={day}
-            title={`${day} · ${n} record${n === 1 ? "" : "s"}`}
+            title={t.detail.pulseTip(day, n)}
             className="group relative flex-1 rounded-t-[2px] transition-colors"
             style={{ height: `${Math.max(8, (n / max) * 100)}%` }}
           >
@@ -564,8 +565,8 @@ function RecordsPulse({ records }: { records: SystemRecordDTO[] }) {
         ))}
       </div>
       <div className="flex justify-between font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground/50">
-        <span>D-14</span>
-        <span>TODAY</span>
+        <span>{t.detail.d14}</span>
+        <span>{t.detail.today}</span>
       </div>
     </div>
   );
