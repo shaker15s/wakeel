@@ -22,10 +22,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MonoLabel } from "@/components/app/motion-bits";
+import { ImportPreviewDialog } from "@/components/app/console/import-preview-dialog";
 import { createUser } from "@/lib/api-client";
 import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
-import { importWorkspaceFile } from "@/lib/workspace-import";
+import { confirmImport, parseWorkspaceFile, type WorkspacePayload } from "@/lib/workspace-import";
 
 interface FormState {
   name: string;
@@ -47,6 +48,9 @@ export function OnboardingDialog() {
   const setConsoleTab = useWakeel((s) => s.setConsoleTab);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  /** parsed workspace file awaiting confirmation in the preview dialog */
+  const [preview, setPreview] = useState<WorkspacePayload | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const [form, setForm] = useState<FormState>({
     name: "",
@@ -93,17 +97,26 @@ export function OnboardingDialog() {
   /** restore a workspace export instead of creating a throwaway operator */
   const handleImportFile = async (file: File) => {
     if (importing || mutation.isPending) return;
+    const parsed = await parseWorkspaceFile(file);
+    if (!parsed.ok) {
+      toast.error(t.sb.importInvalid);
+      return;
+    }
+    setPreview(parsed.payload);
+    setPreviewOpen(true);
+  };
+
+  const handleConfirmImport = async () => {
+    if (importing || !preview) return;
     setImporting(true);
     try {
-      const res = await importWorkspaceFile(file);
+      const res = await confirmImport(preview);
       if (!res.ok) {
-        if (res.reason === "invalid") {
-          toast.error(t.sb.importInvalid);
-        } else {
-          toast.error(t.sb.importErr, { description: res.message });
-        }
+        toast.error(t.sb.importErr, { description: res.message });
         return;
       }
+      setPreviewOpen(false);
+      setPreview(null);
       setUserId(res.userId);
       setView("console");
       setConsoleTab("systems");
@@ -266,6 +279,16 @@ export function OnboardingDialog() {
           </div>
         </div>
       </DialogContent>
+
+      {/* import preview — inspect the file BEFORE it restores into a new operator */}
+      <ImportPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        payload={preview}
+        importing={importing}
+        currentSystemNames={[]}
+        onConfirm={() => void handleConfirmImport()}
+      />
     </Dialog>
   );
 }

@@ -195,6 +195,27 @@ export const en = {
     workspaceSection: "WORKSPACE DATA",
   },
 
+  impv: {
+    eyebrow: "PRE-FLIGHT CHECK",
+    title: "Import this workspace?",
+    desc: "Inspect exactly what this file restores before it touches your console. Confirming creates a fresh operator workspace from the file.",
+    statSystems: "SYSTEMS",
+    statRecords: "RECORDS",
+    exported: "EXPORTED",
+    forged: "FORGED",
+    discovered: "DISCOVERED",
+    recShort: "REC",
+    collisions: (n: number) =>
+      n === 1
+        ? "1 name also exists in your current workspace — both copies stay independent:"
+        : `${n} names also exist in your current workspace — both copies stay independent:`,
+    noCollisions: "No name collisions with your current workspace.",
+    note: "The file restores into a brand-new operator — your current session switches to it. Nothing is merged.",
+    cancel: "CANCEL",
+    confirm: "IMPORT WORKSPACE",
+    importing: "IMPORTING…",
+  },
+
   side: {
     overview: "Overview",
     discovery: "Discovery",
@@ -428,6 +449,27 @@ export const en = {
     seedOkDesc: (n: number) =>
       `Wakeel added ${n} realistic record${n === 1 ? "" : "s"} — logged to the ledger.`,
     seedErr: "Seed failed",
+    csvImport: "IMPORT CSV",
+    csvNoFields: "NO BLUEPRINT FIELDS TO MAP",
+    csvTitle: "CSV COLUMN MAPPING",
+    csvDesc:
+      "Match each system field to a column from your file. Values are coerced to the field's type on import — rows are previewed before anything is written.",
+    csvRows: (n: number) => `${n} ROW${n === 1 ? "" : "S"} DETECTED`,
+    csvCols: (n: number) => `${n} COLUMN${n === 1 ? "" : "S"}`,
+    csvFile: "FILE",
+    csvFieldCol: "SYSTEM FIELD",
+    csvMapCol: "CSV COLUMN",
+    csvSkip: "— SKIP —",
+    csvUnmapped: (n: number) => `${n} field${n === 1 ? "" : "s"} will be left empty`,
+    csvPreview: "PREVIEW · FIRST 3 ROWS",
+    csvPreviewAllMapped: "ALL MAPPED",
+    csvImportRows: (n: number) => `IMPORT ${n} ROW${n === 1 ? "" : "S"}`,
+    csvImporting: "IMPORTING…",
+    csvOk: (n: number) => `${n} record${n === 1 ? "" : "s"} imported`,
+    csvOkDesc: "From CSV — logged to the ledger.",
+    csvErr: "CSV import failed",
+    csvParseErr: "Could not read that file as CSV text.",
+    csvEmptyErr: "That CSV has no data rows to import.",
   },
 
   auto: {
@@ -454,6 +496,23 @@ export const en = {
     toastErr: "Could not run automation",
     logLabel: "Automation execution log",
     exitCode: (failure: string) => `EXIT CODE 1 · ${failure}`,
+    lab: "AUTOMATION LAB",
+    suggest: "SUGGEST · WAKEEL",
+    suggesting: "WAKEEL IS STUDYING THE SYSTEM…",
+    proposals: (n: number) => `WAKEEL PROPOSES · ${n}`,
+    proposedTag: "PROPOSED",
+    whenLabel: "WHEN",
+    thenLabel: "DO",
+    whyLabel: "WHY",
+    wire: "WIRE IT",
+    wiring: "WIRING…",
+    dismiss: "Dismiss proposal",
+    wireOk: "Automation wired",
+    wireOkDesc: "Added to the blueprint and logged to the ledger.",
+    wireErr: "Could not wire automation",
+    suggestErr: "Wakeel could not propose right now — try again in a moment.",
+    labHint:
+      "PROPOSALS ARE GROUNDED IN THIS SYSTEM'S BLUEPRINT AND LIVE RECORDS. WIRING ONE ADDS IT TO THE BLUEPRINT PERMANENTLY.",
   },
 
   ana: {
@@ -485,9 +544,13 @@ export const en = {
     sugg2: "Suggest an automation for my CRM",
     sugg3: (name: string) => `How many records are in ${name}?`,
     insightEmpty: (name: string) => `Seed realistic sample data into “${name}”`,
-    insightStale: (name: string) => `It’s been quiet around ${name} — want a status digest?`,
+    insightStale: (name: string) => `Draft a status digest for “${name}”`,
     insightRich: (name: string) => `Give me a pulse on ${name} — totals, recent writes, anything odd.`,
     insightCold: "No systems yet — give me your company URL and I’ll map your stack.",
+    digestTag: "PROACTIVE REPORT",
+    digestOk: "Status digest ready",
+    digestOkDesc: "Wakeel posted the report into your conversation.",
+    digestErr: "Digest failed",
     placeholder: "Message Wakeel…",
     composerLabel: "Message Wakeel",
     send: "Send message",
@@ -756,6 +819,27 @@ export const ar: Dict = {
     workspaceSection: "بيانات المساحة",
   },
 
+  impv: {
+    eyebrow: "فحص ما قبل الإقلاع",
+    title: "استيراد مساحة العمل هذه؟",
+    desc: "تفقّد ما سيستعيده هذا الملف قبل أن يلمس كونسولك. التأكيد ينشئ مساحة عمل مشغّل جديدة من الملف.",
+    statSystems: "أنظمة",
+    statRecords: "سجلات",
+    exported: "صُدّر",
+    forged: "مبني",
+    discovered: "مُكتشف",
+    recShort: "سجل",
+    collisions: (n: number) =>
+      n === 1
+        ? "اسم واحد موجود أيضاً في مساحتك الحالية — وستبقى النسختان مستقلتين:"
+        : `${n} أسماء موجودة أيضاً في مساحتك الحالية — وستبقى النسخ مستقلة:`,
+    noCollisions: "لا تعارض أسماء مع مساحة عملك الحالية.",
+    note: "يُستعاد الملف في مشغّل جديد تماماً — ستتحول جلستك الحالية إليه. لا يتم دمج أي شيء.",
+    cancel: "إلغاء",
+    confirm: "استيراد مساحة العمل",
+    importing: "جارٍ الاستيراد…",
+  },
+
   side: {
     overview: "نظرة عامة",
     discovery: "الاستكشاف",
@@ -990,6 +1074,27 @@ export const ar: Dict = {
     seedOkDesc: (n: number) =>
       `أضاف واكيل ${n} ${n === 1 ? "سجلاً واقعياً" : "سجلات واقعية"} — سُجلت في الدفتر.`,
     seedErr: "فشلت الزراعة",
+    csvImport: "استيراد CSV",
+    csvNoFields: "لا حقول مخططة للربط",
+    csvTitle: "ربط أعمدة CSV",
+    csvDesc:
+      "طابق كل حقل من حقول النظام مع عمود من ملفك. تُحوَّل القيم إلى نوع الحقل عند الاستيراد — وتُعاين الصفوف قبل كتابة أي شيء.",
+    csvRows: (n: number) => `رُصد ${n} ${n === 1 ? "صف" : "صفوف"}`,
+    csvCols: (n: number) => `${n} ${n === 1 ? "عمود" : "أعمدة"}`,
+    csvFile: "الملف",
+    csvFieldCol: "حقل النظام",
+    csvMapCol: "عمود CSV",
+    csvSkip: "— تخطٍ —",
+    csvUnmapped: (n: number) => `${n} ${n === 1 ? "حقل سيُترك فارغاً" : "حقول ستُترك فارغة"}`,
+    csvPreview: "معاينة · أول 3 صفوف",
+    csvPreviewAllMapped: "الكل مطابق",
+    csvImportRows: (n: number) => `استورد ${n} ${n === 1 ? "صفاً" : "صفوف"}`,
+    csvImporting: "جارٍ الاستيراد…",
+    csvOk: (n: number) => `استُورد ${n} ${n === 1 ? "سجل" : "سجلات"}`,
+    csvOkDesc: "من ملف CSV — سُجلت في الدفتر.",
+    csvErr: "فشل استيراد CSV",
+    csvParseErr: "تعذرت قراءة الملف كنص CSV.",
+    csvEmptyErr: "لا تحتوي هذه الملفات على صفوف بيانات للاستيراد.",
   },
 
   auto: {
@@ -1016,6 +1121,23 @@ export const ar: Dict = {
     toastErr: "تعذر تشغيل الأتمتة",
     logLabel: "سجل تنفيذ الأتمتة",
     exitCode: (failure: string) => `رمز الخروج 1 · ${failure}`,
+    lab: "مختبر الأتمتة",
+    suggest: "اقترح · واكيل",
+    suggesting: "واكيل يدرس النظام…",
+    proposals: (n: number) => `واكيل يقترح · ${n}`,
+    proposedTag: "مقترحة",
+    whenLabel: "المحفّز",
+    thenLabel: "الإجراء",
+    whyLabel: "لماذا",
+    wire: "اربطها",
+    wiring: "جارٍ الربط…",
+    dismiss: "تجاهل الاقتراح",
+    wireOk: "رُبطت الأتمتة",
+    wireOkDesc: "أُضيفت إلى المخطط وسُجلت في الدفتر.",
+    wireErr: "تعذر ربط الأتمتة",
+    suggestErr: "تعذر على واكيل الاقتراح الآن — أعد المحاولة بعد قليل.",
+    labHint:
+      "تُشتق الاقتراحات من مخطط هذا النظام وسجلاته الحية. ربط أحدها يضيفه إلى المخطط نهائياً.",
   },
 
   ana: {
@@ -1047,9 +1169,13 @@ export const ar: Dict = {
     sugg2: "اقترح أتمتة لنظام العملاء عندي",
     sugg3: (name: string) => `كم سجلاً في ${name}؟`,
     insightEmpty: (name: string) => `ازرع بيانات تجريبية واقعية في «${name}»`,
-    insightStale: (name: string) => `لا نشاط حول ${name} مؤخراً — أعدّ لك ملخصاً للحالة؟`,
+    insightStale: (name: string) => `أعدّ ملخص حالة لـ «${name}»`,
     insightRich: (name: string) => `أعطني نبضة عن ${name} — الإجماليات وآخر الكتابات وأي شيء غريب.`,
     insightCold: "لا أنظمة بعد — أعطني رابط شركتك وسأرصد منظومتك.",
+    digestTag: "تقرير استباقي",
+    digestOk: "ملخص الحالة جاهز",
+    digestOkDesc: "أرسل واكيل التقرير إلى محادثتك.",
+    digestErr: "فشل إعداد الملخص",
     placeholder: "راسل واكيل…",
     composerLabel: "راسل واكيل",
     send: "إرسال الرسالة",
@@ -1199,6 +1325,15 @@ export function localizeActivity(
       `زُرع ${n} ${n === 1 ? "سجل تجريبي" : "سجلات تجريبية"} في`,
       { bdi: m[2] },
     ];
+  } else if ((m = /^Wired new automation into (.+)$/.exec(t))) {
+    parts = [`رُبطت أتمتة جديدة في`, { bdi: m[1] }];
+  } else if ((m = /^Imported (\d+) records? into (.+) from CSV$/.exec(t))) {
+    const n = Number(m[1]);
+    parts = [
+      `استُورد ${n} ${n === 1 ? "سجل" : "سجلات"} إلى`,
+      { bdi: m[2] },
+      ` من ملف CSV`,
+    ];
   } else if ((m = /^Imported (\d+) systems? for (.+)$/.exec(t))) {
     const n = Number(m[1]);
     parts = [`استُورد ${n} ${n === 1 ? "نظام" : "أنظمة"} لـ`, { bdi: m[2] }];
@@ -1219,6 +1354,8 @@ export function localizeActivity(
     parts = [`نُقل`, { bdi: m[1] }, ` إلى DRAFT`];
   } else if ((m = /^Wakeel handled a request for (.+)$/.exec(t))) {
     parts = [`وكيل عالج طلباً لـ`, { bdi: m[1] }];
+  } else if ((m = /^Wakeel delivered a status digest for (.+)$/.exec(t))) {
+    parts = [`وكيل أعدّ ملخص حالة لـ`, { bdi: m[1] }];
   } else if ((m = /^Archived (.+)$/.exec(t))) {
     parts = [`أُرشف`, { bdi: m[1] }];
   } else if ((m = /^Restored (.+)$/.exec(t))) {
@@ -1249,6 +1386,12 @@ export function localizeActivity(
       const s = Number(dm[1]);
       const r = Number(dm[2]);
       detail = `استُرجع من ملف مساحة عمل · ${s} ${s === 1 ? "نظام" : "أنظمة"} · ${r} ${r === 1 ? "سجل" : "سجلات"}`;
+    } else if (
+      (dm = /^(\d+) records? · last write (\d+)d ago$/.exec(detail))
+    ) {
+      const r = Number(dm[1]);
+      const d = Number(dm[2]);
+      detail = `${r} ${r === 1 ? "سجل" : "سجلات"} · آخر كتابة قبل ${d} ${d === 1 ? "يوم" : "أيام"}`;
     }
   }
 

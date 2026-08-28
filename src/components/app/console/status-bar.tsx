@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { initialsOf } from "@/components/app/bits";
 import { LangToggle } from "@/components/app/lang-toggle";
+import { ImportPreviewDialog } from "@/components/app/console/import-preview-dialog";
 import {
   getSystems,
   getSystemDetail,
@@ -28,7 +29,7 @@ import {
 import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { importWorkspaceFile } from "@/lib/workspace-import";
+import { confirmImport, parseWorkspaceFile, type WorkspacePayload } from "@/lib/workspace-import";
 
 function LiveClock() {
   const [now, setNow] = useState<Date | null>(null);
@@ -97,26 +98,38 @@ export function StatusBar() {
   const [exporting, setExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  /** parsed workspace file awaiting confirmation in the preview dialog */
+  const [preview, setPreview] = useState<WorkspacePayload | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   /**
-   * Import a `wakeel.workspace/v1` export file: client-side sanity check,
-   * server-side re-validation + restore into a fresh operator, then adopt
-   * that operator as the live session (cache wiped so every view refetches).
+   * Import a `wakeel.workspace/v1` export file: parse client-side → PREVIEW
+   * dialog (contents + collisions) → server-side re-validation + restore
+   * into a fresh operator → adopt that operator as the live session.
    */
   const handleImportFile = async (file: File) => {
     if (importing) return;
+    const parsed = await parseWorkspaceFile(file);
+    if (!parsed.ok) {
+      toast.error(t.sb.importInvalid);
+      return;
+    }
+    setPreview(parsed.payload);
+    setPreviewOpen(true);
+  };
+
+  const handleConfirmImport = async () => {
+    if (importing || !preview) return;
     setImporting(true);
     try {
-      const res = await importWorkspaceFile(file);
+      const res = await confirmImport(preview);
       if (!res.ok) {
-        if (res.reason === "invalid") {
-          toast.error(t.sb.importInvalid);
-        } else {
-          toast.error(t.sb.importErr, { description: res.message });
-        }
+        toast.error(t.sb.importErr, { description: res.message });
         return;
       }
       // adopt the restored operator as the live session
+      setPreviewOpen(false);
+      setPreview(null);
       setUserId(res.userId);
       queryClient.clear();
       setConsoleTab("systems");
@@ -319,6 +332,16 @@ export function StatusBar() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* import preview — inspect the file BEFORE it restores into a new operator */}
+      <ImportPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        payload={preview}
+        importing={importing}
+        currentSystemNames={(systemsData?.systems ?? []).map((s) => s.name)}
+        onConfirm={() => void handleConfirmImport()}
+      />
     </header>
   );
 }

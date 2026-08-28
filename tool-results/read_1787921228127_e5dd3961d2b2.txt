@@ -1,0 +1,803 @@
+     1→"use client";
+     2→
+     3→import { useEffect, useRef, useState } from "react";
+     4→import { useMutation } from "@tanstack/react-query";
+     5→import { AnimatePresence, motion } from "framer-motion";
+     6→import {
+     7→  Check,
+     8→  Download,
+     9→  Loader2,
+    10→  MoreHorizontal,
+    11→  Pencil,
+    12→  Plus,
+    13→  Sprout,
+    14→  Trash2,
+    15→  X,
+    16→} from "lucide-react";
+    17→import { toast } from "sonner";
+    18→import {
+    19→  AlertDialog,
+    20→  AlertDialogAction,
+    21→  AlertDialogCancel,
+    22→  AlertDialogContent,
+    23→  AlertDialogDescription,
+    24→  AlertDialogFooter,
+    25→  AlertDialogHeader,
+    26→  AlertDialogTitle,
+    27→} from "@/components/ui/alert-dialog";
+    28→import { Button } from "@/components/ui/button";
+    29→import {
+    30→  DropdownMenu,
+    31→  DropdownMenuContent,
+    32→  DropdownMenuItem,
+    33→  DropdownMenuTrigger,
+    34→} from "@/components/ui/dropdown-menu";
+    35→import { Input } from "@/components/ui/input";
+    36→import { Label } from "@/components/ui/label";
+    37→import {
+    38→  Select,
+    39→  SelectContent,
+    40→  SelectItem,
+    41→  SelectTrigger,
+    42→  SelectValue,
+    43→} from "@/components/ui/select";
+    44→import { Switch } from "@/components/ui/switch";
+    45→import {
+    46→  Table,
+    47→  TableBody,
+    48→  TableCell,
+    49→  TableHead,
+    50→  TableHeader,
+    51→  TableRow,
+    52→} from "@/components/ui/table";
+    53→import { EmptyState } from "@/components/app/bits";
+    54→import { MonoLabel } from "@/components/app/motion-bits";
+    55→import {
+    56→  bulkDeleteRecords,
+    57→  createRecord,
+    58→  deleteRecord,
+    59→  parseRecordData,
+    60→  seedSystem,
+    61→  updateRecord,
+    62→} from "@/lib/api-client";
+    63→import type { BlueprintField, SystemRecordDTO } from "@/lib/api-client";
+    64→import { useT } from "@/lib/i18n";
+    65→import { useWakeel } from "@/lib/store";
+    66→import { cn } from "@/lib/utils";
+    67→
+    68→/* --------------------------- record value rendering ------------------------ */
+    69→
+    70→export function renderCellValue(value: unknown): string {
+    71→  if (value === null || value === undefined || value === "") return "—";
+    72→  if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+    73→  if (Array.isArray(value)) return value.join(", ");
+    74→  if (typeof value === "object") return JSON.stringify(value);
+    75→  return String(value);
+    76→}
+    77→
+    78→/* -------------------------------- CSV export ------------------------------- */
+    79→
+    80→function csvEscape(v: unknown): string {
+    81→  const s = renderCellValue(v);
+    82→  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    83→}
+    84→
+    85→export function exportSystemCsv(
+    86→  systemName: string,
+    87→  cols: BlueprintField[],
+    88→  rows: SystemRecordDTO[],
+    89→  suffix = "records"
+    90→) {
+    91→  const headers = cols.length > 0 ? cols.map((c) => c.label) : ["data"];
+    92→  const lines = [headers.map((h) => csvEscape(h)).join(",")];
+    93→  for (const rec of rows) {
+    94→    const data = parseRecordData(rec.data);
+    95→    const row =
+    96→      cols.length > 0
+    97→        ? cols.map((c) => csvEscape(data[c.key]))
+    98→        : [csvEscape(JSON.stringify(data))];
+    99→    lines.push(row.join(","));
+   100→  }
+   101→  const blob = new Blob([lines.join("\n")], {
+   102→    type: "text/csv;charset=utf-8",
+   103→  });
+   104→  const url = URL.createObjectURL(blob);
+   105→  const a = document.createElement("a");
+   106→  a.href = url;
+   107→  a.download = `${systemName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${suffix}.csv`;
+   108→  document.body.appendChild(a);
+   109→  a.click();
+   110→  a.remove();
+   111→  URL.revokeObjectURL(url);
+   112→}
+   113→
+   114→/* ------------------------------ add record form ---------------------------- */
+   115→
+   116→function DynamicFieldInput({
+   117→  field,
+   118→  value,
+   119→  onChange,
+   120→}: {
+   121→  field: BlueprintField;
+   122→  value: unknown;
+   123→  onChange: (v: unknown) => void;
+   124→}) {
+   125→  const t = useT();
+   126→  const type = field.type;
+   127→  if (type === "boolean" || type === "bool" || type === "checkbox") {
+   128→    return (
+   129→      <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-secondary/60 px-3">
+   130→        <Switch
+   131→          checked={!!value}
+   132→          onCheckedChange={onChange}
+   133→          aria-label={field.label}
+   134→        />
+   135→        <span className="font-mono text-[11px] text-muted-foreground">
+   136→          {value ? t.recs.true : t.recs.false}
+   137→        </span>
+   138→      </div>
+   139→    );
+   140→  }
+   141→  if ((type === "select" || type === "enum") && field.options?.length) {
+   142→    return (
+   143→      <Select value={String(value ?? "")} onValueChange={onChange}>
+   144→        <SelectTrigger className="h-9 w-full border-border bg-secondary/60">
+   145→          <SelectValue placeholder={t.recs.selectField(field.label)} />
+   146→        </SelectTrigger>
+   147→        <SelectContent className="border-border bg-popover">
+   148→          {field.options.map((opt) => (
+   149→            <SelectItem key={opt} value={opt}>
+   150→              {opt}
+   151→            </SelectItem>
+   152→          ))}
+   153→        </SelectContent>
+   154→      </Select>
+   155→    );
+   156→  }
+   157→  const htmlType =
+   158→    type === "number" || type === "int" || type === "float"
+   159→      ? "number"
+   160→      : type === "date" || type === "datetime"
+   161→        ? "date"
+   162→        : "text";
+   163→  return (
+   164→    <Input
+   165→      type={htmlType}
+   166→      value={value === null || value === undefined ? "" : String(value)}
+   167→      onChange={(e) =>
+   168→        onChange(htmlType === "number" ? e.target.value : e.target.value)
+   169→      }
+   170→      className="h-9 border-border bg-secondary/60 focus-visible:ring-gold/50"
+   171→    />
+   172→  );
+   173→}
+   174→
+   175→/* ------------------------------ selection box ------------------------------ */
+   176→
+   177→function SelectBox({
+   178→  checked,
+   179→  indeterminate,
+   180→  onChange,
+   181→  disabled,
+   182→  label,
+   183→}: {
+   184→  checked: boolean;
+   185→  indeterminate?: boolean;
+   186→  onChange: () => void;
+   187→  disabled?: boolean;
+   188→  label: string;
+   189→}) {
+   190→  return (
+   191→    <button
+   192→      type="button"
+   193→      role="checkbox"
+   194→      aria-checked={indeterminate ? "mixed" : checked}
+   195→      aria-label={label}
+   196→      disabled={disabled}
+   197→      onClick={(e) => {
+   198→        e.stopPropagation();
+   199→        onChange();
+   200→      }}
+   201→      className={cn(
+   202→        "flex size-4 shrink-0 items-center justify-center rounded-[3px] border transition-all",
+   203→        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:ring-offset-1 focus-visible:ring-offset-card",
+   204→        checked || indeterminate
+   205→          ? "border-gold bg-gold text-black hover:bg-gold-pale"
+   206→          : "border-border bg-secondary/50 hover:border-gold/60 hover:bg-secondary",
+   207→        disabled && "cursor-not-allowed opacity-40"
+   208→      )}
+   209→    >
+   210→      {indeterminate ? (
+   211→        <span className="h-0.5 w-2 rounded-full bg-black" />
+   212→      ) : checked ? (
+   213→        <Check className="size-3" strokeWidth={3} />
+   214→      ) : null}
+   215→    </button>
+   216→  );
+   217→}
+   218→
+   219→/* ---------------------------- keyboard hint chip --------------------------- */
+   220→
+   221→function Kbd({ children }: { children: string }) {
+   222→  return (
+   223→    <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[3px] border border-border bg-secondary px-1 font-mono text-[9px] font-medium uppercase text-foreground/80 shadow-[inset_0_-1px_0_0_rgba(245,239,228,0.06)]">
+   224→      {children}
+   225→    </kbd>
+   226→  );
+   227→}
+   228→
+   229→/* ------------------------------- records tab ------------------------------- */
+   230→
+   231→export function RecordsTab({
+   232→  systemId,
+   233→  systemName,
+   234→  isArchived,
+   235→  records,
+   236→  columns,
+   237→  invalidateAll,
+   238→}: {
+   239→  systemId: string;
+   240→  systemName: string;
+   241→  isArchived: boolean;
+   242→  records: SystemRecordDTO[];
+   243→  columns: BlueprintField[];
+   244→  invalidateAll: () => void;
+   245→}) {
+   246→  const t = useT();
+   247→  const lang = useWakeel((s) => s.lang);
+   248→  const [addingRecord, setAddingRecord] = useState(false);
+   249→  const [draft, setDraft] = useState<Record<string, unknown>>({});
+   250→  const [editingId, setEditingId] = useState<string | null>(null);
+   251→  const [editDraft, setEditDraft] = useState<Record<string, unknown>>({});
+   252→  const [selected, setSelected] = useState<Set<string>>(new Set());
+   253→  const [confirmBulk, setConfirmBulk] = useState(false);
+   254→  /** keyboard cursor — index into `records`, moved with j/k, armed with x/e */
+   255→  const [cursor, setCursor] = useState<number | null>(null);
+   256→  const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
+   257→
+   258→  // keep the cursor valid as records come and go (adjust-during-render pattern)
+   259→  const [prevLen, setPrevLen] = useState(records.length);
+   260→  if (prevLen !== records.length) {
+   261→    setPrevLen(records.length);
+   262→    if (cursor !== null) {
+   263→      setCursor(records.length === 0 ? null : Math.min(cursor, records.length - 1));
+   264→    }
+   265→  }
+   266→
+   267→  // follow the cursor with the scroll container
+   268→  useEffect(() => {
+   269→    if (cursor === null) return;
+   270→    rowRefs.current.get(cursor)?.scrollIntoView({ block: "nearest" });
+   271→  }, [cursor]);
+   272→
+   273→  const addRecord = useMutation({
+   274→    mutationFn: () => createRecord(systemId, draft),
+   275→    onSuccess: () => {
+   276→      invalidateAll();
+   277→      setAddingRecord(false);
+   278→      setDraft({});
+   279→      toast.success(t.recs.toastAddOk, {
+   280→        description: t.recs.toastAddDesc,
+   281→      });
+   282→    },
+   283→    onError: (err: Error) =>
+   284→      toast.error(t.recs.toastAddErr, { description: err.message }),
+   285→  });
+   286→
+   287→  /** LLM-grown sample rows — offered right from the empty state. */
+   288→  const seed = useMutation({
+   289→    mutationFn: () => seedSystem(systemId, 5, lang),
+   290→    onSuccess: (res) => {
+   291→      invalidateAll();
+   292→      toast.success(t.recs.seedOk, {
+   293→        description: t.recs.seedOkDesc(res.seeded),
+   294→      });
+   295→    },
+   296→    onError: (err: Error) =>
+   297→      toast.error(t.recs.seedErr, { description: err.message }),
+   298→  });
+   299→
+   300→  const removeRecord = useMutation({
+   301→    mutationFn: (id: string) => deleteRecord(id),
+   302→    onSuccess: (_data, removedId) => {
+   303→      invalidateAll();
+   304→      setSelected((prev) => {
+   305→        const next = new Set(prev);
+   306→        next.delete(removedId);
+   307→        return next;
+   308→      });
+   309→      toast(t.recs.toastDelOk, { description: t.recs.toastDelDesc });
+   310→    },
+   311→    onError: (err: Error) =>
+   312→      toast.error(t.recs.toastDelErr, { description: err.message }),
+   313→  });
+   314→
+   315→  const editRecord = useMutation({
+   316→    mutationFn: () => updateRecord(editingId!, editDraft),
+   317→    onSuccess: () => {
+   318→      invalidateAll();
+   319→      setEditingId(null);
+   320→      setEditDraft({});
+   321→      toast.success(t.recs.toastUpdOk, {
+   322→        description: t.recs.toastUpdDesc,
+   323→      });
+   324→    },
+   325→    onError: (err: Error) =>
+   326→      toast.error(t.recs.toastUpdErr, { description: err.message }),
+   327→  });
+   328→
+   329→  const bulkDelete = useMutation({
+   330→    mutationFn: () => bulkDeleteRecords([...selected]),
+   331→    onSuccess: (res) => {
+   332→      invalidateAll();
+   333→      setSelected(new Set());
+   334→      setConfirmBulk(false);
+   335→      toast.success(t.recs.toastBulkOk(res.deleted), {
+   336→        description: t.recs.toastBulkDesc,
+   337→      });
+   338→    },
+   339→    onError: (err: Error) => {
+   340→      setConfirmBulk(false);
+   341→      toast.error(t.recs.toastBulkErr, { description: err.message });
+   342→    },
+   343→  });
+   344→
+   345→  const toggleRow = (id: string) =>
+   346→    setSelected((prev) => {
+   347→      const next = new Set(prev);
+   348→      if (next.has(id)) next.delete(id);
+   349→      else next.add(id);
+   350→      return next;
+   351→    });
+   352→
+   353→  const allSelected = records.length > 0 && selected.size === records.length;
+   354→  const someSelected = selected.size > 0 && !allSelected;
+   355→
+   356→  const toggleAll = () =>
+   357→    setSelected(allSelected ? new Set() : new Set(records.map((r) => r.id)));
+   358→
+   359→  const selectedRecords = records.filter((r) => selected.has(r.id));
+   360→
+   361→  /** power-user keyboard model: j/k move, x toggles, e edits, esc dismisses */
+   362→  const onTableKeyDown = (e: React.KeyboardEvent) => {
+   363→    const target = e.target as HTMLElement;
+   364→    // let form fields and open menus consume their own keys
+   365→    if (target.closest(
+   366→      "input, textarea, select, [role='combobox'], [role='listbox'], [role='option'], [role='menu'], [data-radix-popper-content-wrapper]"
+   367→    ))
+   368→      return;
+   369→    if (records.length === 0) return;
+   370→    const key = e.key;
+   371→    if (key === "j" || key === "J" || key === "ArrowDown") {
+   372→      e.preventDefault();
+   373→      setCursor((c) => (c === null ? 0 : Math.min(c + 1, records.length - 1)));
+   374→    } else if (key === "k" || key === "K" || key === "ArrowUp") {
+   375→      e.preventDefault();
+   376→      setCursor((c) => (c === null ? 0 : Math.max(c - 1, 0)));
+   377→    } else if (key === "x" || key === "X") {
+   378→      if (cursor === null || isArchived) return;
+   379→      e.preventDefault();
+   380→      toggleRow(records[cursor].id);
+   381→    } else if (key === "e" || key === "E") {
+   382→      if (cursor === null || isArchived) return;
+   383→      e.preventDefault();
+   384→      const rec = records[cursor];
+   385→      setAddingRecord(false);
+   386→      setEditingId(rec.id);
+   387→      setEditDraft({ ...parseRecordData(rec.data) });
+   388→    } else if (key === "Escape") {
+   389→      setCursor(null);
+   390→    }
+   391→  };
+   392→
+   393→  return (
+   394→    <section className="flex min-w-0 flex-col gap-2.5">
+   395→      <div className="flex items-center justify-between gap-2">
+   396→        <MonoLabel>{t.recs.header(records.length)}</MonoLabel>
+   397→        <div className="flex items-center gap-1.5">
+   398→          <Button
+   399→            size="sm"
+   400→            variant="ghost"
+   401→            onClick={() => exportSystemCsv(systemName, columns, records)}
+   402→            disabled={records.length === 0}
+   403→            className="h-8 gap-1.5 rounded-sm border border-border font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-40"
+   404→          >
+   405→            <Download className="size-3" /> CSV
+   406→          </Button>
+   407→          <Button
+   408→            size="sm"
+   409→            onClick={() => {
+   410→              setEditingId(null);
+   411→              setAddingRecord((v) => !v);
+   412→            }}
+   413→            disabled={isArchived}
+   414→            className="h-8 gap-1.5 rounded-sm bg-primary font-mono text-[10px] uppercase tracking-[0.12em] text-primary-foreground hover:bg-gold-pale"
+   415→          >
+   416→            {addingRecord ? (
+   417→              <>
+   418→                <X className="size-3" /> {t.recs.cancel}
+   419→              </>
+   420→            ) : (
+   421→              <>
+   422→                <Plus className="size-3" /> {t.recs.add}
+   423→              </>
+   424→            )}
+   425→          </Button>
+   426→        </div>
+   427→      </div>
+   428→
+   429→      {/* bulk selection toolbar */}
+   430→      <AnimatePresence>
+   431→        {selected.size > 0 && (
+   432→          <motion.div
+   433→            initial={{ opacity: 0, height: 0 }}
+   434→            animate={{ opacity: 1, height: "auto" }}
+   435→            exit={{ opacity: 0, height: 0 }}
+   436→            className="overflow-hidden"
+   437→          >
+   438→            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gold/35 bg-gold/[0.05] px-3 py-2">
+   439→              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-gold">
+   440→                {t.recs.selected(selected.size)}
+   441→              </span>
+   442→              <div className="ms-auto flex items-center gap-1.5">
+   443→                <Button
+   444→                  size="sm"
+   445→                  variant="ghost"
+   446→                  onClick={() =>
+   447→                    exportSystemCsv(systemName, columns, selectedRecords, "selection")
+   448→                  }
+   449→                  className="h-7 gap-1.5 rounded-sm px-2 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:bg-secondary hover:text-foreground"
+   450→                >
+   451→                  <Download className="size-3" /> {t.recs.export}
+   452→                </Button>
+   453→                <Button
+   454→                  size="sm"
+   455→                  variant="ghost"
+   456→                  onClick={() => setSelected(new Set())}
+   457→                  className="h-7 rounded-sm px-2 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:bg-secondary hover:text-foreground"
+   458→                >
+   459→                  {t.recs.clearSel}
+   460→                </Button>
+   461→                <Button
+   462→                  size="sm"
+   463→                  variant="ghost"
+   464→                  onClick={() => setConfirmBulk(true)}
+   465→                  disabled={isArchived || bulkDelete.isPending}
+   466→                  className="h-7 gap-1.5 rounded-sm border border-destructive/40 px-2 font-mono text-[10px] uppercase tracking-[0.12em] text-destructive hover:bg-destructive/10"
+   467→                >
+   468→                  {bulkDelete.isPending ? (
+   469→                    <Loader2 className="size-3 animate-spin" />
+   470→                  ) : (
+   471→                    <Trash2 className="size-3" />
+   472→                  )}
+   473→                  {t.recs.deleteSel}
+   474→                </Button>
+   475→              </div>
+   476→            </div>
+   477→          </motion.div>
+   478→        )}
+   479→      </AnimatePresence>
+   480→
+   481→      {/* inline add form */}
+   482→      <AnimatePresence>
+   483→        {addingRecord && (
+   484→          <motion.form
+   485→            initial={{ opacity: 0, height: 0 }}
+   486→            animate={{ opacity: 1, height: "auto" }}
+   487→            exit={{ opacity: 0, height: 0 }}
+   488→            onSubmit={(e) => {
+   489→              e.preventDefault();
+   490→              addRecord.mutate();
+   491→            }}
+   492→            className="overflow-hidden"
+   493→          >
+   494→            <div className="grid gap-3 rounded-lg border border-gold/25 bg-gold/[0.04] p-4 sm:grid-cols-2">
+   495→              {columns.map((f) => (
+   496→                <div key={f.key} className="flex flex-col gap-1.5">
+   497→                  <Label className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+   498→                    {f.label}
+   499→                  </Label>
+   500→                  <DynamicFieldInput
+   501→                    field={f}
+   502→                    value={draft[f.key]}
+   503→                    onChange={(v) =>
+   504→                      setDraft((d) => ({ ...d, [f.key]: v }))
+   505→                    }
+   506→                  />
+   507→                </div>
+   508→              ))}
+   509→              {columns.length === 0 && (
+   510→                <p className="text-sm text-muted-foreground">
+   511→                  {t.recs.noFields}
+   512→                </p>
+   513→              )}
+   514→              <div className="sm:col-span-2">
+   515→                <Button
+   516→                  type="submit"
+   517→                  disabled={
+   518→                    addRecord.isPending || columns.length === 0
+   519→                  }
+   520→                  className="h-9 w-full bg-primary font-mono text-[10px] uppercase tracking-[0.14em] text-primary-foreground hover:bg-gold-pale sm:w-48"
+   521→                >
+   522→                  {addRecord.isPending ? (
+   523→                    <>
+   524→                      <Loader2 className="animate-spin" /> {t.recs.saving}
+   525→                    </>
+   526→                  ) : (
+   527→                    t.recs.saveRecord
+   528→                  )}
+   529→                </Button>
+   530→              </div>
+   531→            </div>
+   532→          </motion.form>
+   533→        )}
+   534→      </AnimatePresence>
+   535→
+   536→      {/* inline edit form */}
+   537→      <AnimatePresence>
+   538→        {editingId && !addingRecord && (
+   539→          <motion.form
+   540→            key={editingId}
+   541→            initial={{ opacity: 0, height: 0 }}
+   542→            animate={{ opacity: 1, height: "auto" }}
+   543→            exit={{ opacity: 0, height: 0 }}
+   544→            onSubmit={(e) => {
+   545→              e.preventDefault();
+   546→              editRecord.mutate();
+   547→            }}
+   548→            className="overflow-hidden"
+   549→          >
+   550→            <div className="grid gap-3 rounded-lg border border-gold/40 bg-gold/[0.06] p-4 sm:grid-cols-2">
+   551→              <div className="flex items-center gap-2 sm:col-span-2">
+   552→                <Pencil className="size-3.5 text-gold" />
+   553→                <MonoLabel gold className="text-[9px]">
+   554→                  {t.recs.editing}
+   555→                </MonoLabel>
+   556→              </div>
+   557→              {columns.map((f) => (
+   558→                <div key={f.key} className="flex flex-col gap-1.5">
+   559→                  <Label className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+   560→                    {f.label}
+   561→                  </Label>
+   562→                  <DynamicFieldInput
+   563→                    field={f}
+   564→                    value={editDraft[f.key]}
+   565→                    onChange={(v) =>
+   566→                      setEditDraft((d) => ({ ...d, [f.key]: v }))
+   567→                    }
+   568→                  />
+   569→                </div>
+   570→              ))}
+   571→              <div className="flex gap-2 sm:col-span-2">
+   572→                <Button
+   573→                  type="submit"
+   574→                  disabled={editRecord.isPending || columns.length === 0}
+   575→                  className="h-9 flex-1 bg-primary font-mono text-[10px] uppercase tracking-[0.14em] text-primary-foreground hover:bg-gold-pale sm:flex-none sm:px-6"
+   576→                >
+   577→                  {editRecord.isPending ? (
+   578→                    <>
+   579→                      <Loader2 className="animate-spin" /> {t.recs.saving}
+   580→                    </>
+   581→                  ) : (
+   582→                    t.recs.saveChanges
+   583→                  )}
+   584→                </Button>
+   585→                <Button
+   586→                  type="button"
+   587→                  variant="ghost"
+   588→                  onClick={() => {
+   589→                    setEditingId(null);
+   590→                    setEditDraft({});
+   591→                  }}
+   592→                  className="h-9 border border-border font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:bg-secondary hover:text-foreground"
+   593→                >
+   594→                  {t.recs.discard}
+   595→                </Button>
+   596→              </div>
+   597→            </div>
+   598→          </motion.form>
+   599→        )}
+   600→      </AnimatePresence>
+   601→
+   602→      {/* records table */}
+   603→      {records.length === 0 ? (
+   604→        <EmptyState
+   605→          title={t.recs.noRecordsT}
+   606→          copy={t.recs.noRecordsC}
+   607→          className="py-8"
+   608→        >
+   609→          <div className="flex flex-wrap items-center justify-center gap-2">
+   610→            <Button
+   611→              type="button"
+   612→              size="sm"
+   613→              disabled={seed.isPending || isArchived || columns.length === 0}
+   614→              onClick={() => seed.mutate()}
+   615→              className="group relative h-9 overflow-hidden bg-gold font-mono text-[10px] uppercase tracking-[0.14em] text-[#0A0908] hover:bg-gold-pale"
+   616→            >
+   617→              {seed.isPending ? (
+   618→                <>
+   619→                  <Loader2 className="size-3.5 animate-spin" />
+   620→                  {t.recs.seeding}
+   621→                </>
+   622→              ) : (
+   623→                <>
+   624→                  <Sprout className="size-3.5 transition-transform group-hover:-rotate-12" />
+   625→                  {t.recs.seed}
+   626→                </>
+   627→              )}
+   628→            </Button>
+   629→          </div>
+   630→        </EmptyState>
+   631→      ) : (
+   632→        <>
+   633→          <div
+   634→            tabIndex={0}
+   635→            onKeyDown={onTableKeyDown}
+   636→            aria-label={t.recs.header(records.length)}
+   637→            className="min-w-0 overflow-hidden rounded-lg border border-border transition-shadow focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gold/50"
+   638→          >
+   639→            <Table>
+   640→              <TableHeader>
+   641→                <TableRow className="hover:bg-transparent">
+   642→                  <TableHead className="w-9 pr-0">
+   643→                    <SelectBox
+   644→                      checked={allSelected}
+   645→                      indeterminate={someSelected}
+   646→                      onChange={toggleAll}
+   647→                      disabled={isArchived}
+   648→                      label={t.recs.selectAll}
+   649→                    />
+   650→                  </TableHead>
+   651→                  {columns.map((c) => (
+   652→                    <TableHead
+   653→                      key={c.key}
+   654→                      className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
+   655→                    >
+   656→                      {c.label}
+   657→                    </TableHead>
+   658→                  ))}
+   659→                  <TableHead className="w-10" />
+   660→                </TableRow>
+   661→              </TableHeader>
+   662→              <TableBody>
+   663→                {records.map((rec, idx) => {
+   664→                  const data = parseRecordData(rec.data);
+   665→                  const isEditing = rec.id === editingId;
+   666→                  const isSelected = selected.has(rec.id);
+   667→                  const isCursor = cursor === idx;
+   668→                  return (
+   669→                    <TableRow
+   670→                      key={rec.id}
+   671→                      ref={(el) => {
+   672→                        if (el) rowRefs.current.set(idx, el);
+   673→                        else rowRefs.current.delete(idx);
+   674→                      }}
+   675→                      data-selected={isSelected || isEditing || undefined}
+   676→                      data-cursor={isCursor || undefined}
+   677→                      className={cn(
+   678→                        "transition-colors",
+   679→                        (isSelected || isEditing) &&
+   680→                          "bg-gold/[0.06] hover:bg-gold/[0.09]",
+   681→                        isCursor &&
+   682→                          !isSelected &&
+   683→                          !isEditing &&
+   684→                          "bg-gold/[0.045] hover:bg-gold/[0.07]",
+   685→                        // gold inline-start rail marks the keyboard cursor
+   686→                        isCursor &&
+   687→                          "shadow-[inset_2px_0_0_0_#E8B44A] rtl:shadow-[inset_-2px_0_0_0_#E8B44A]"
+   688→                      )}
+   689→                    >
+   690→                      <TableCell className="pr-0">
+   691→                        <SelectBox
+   692→                          checked={isSelected}
+   693→                          onChange={() => toggleRow(rec.id)}
+   694→                          disabled={isArchived}
+   695→                          label={t.recs.selectOne(renderCellValue(data[columns[0]?.key ?? "id"]))}
+   696→                        />
+   697→                      </TableCell>
+   698→                      {columns.map((c) => (
+   699→                        <TableCell
+   700→                          key={c.key}
+   701→                          dir="auto"
+   702→                          className="max-w-[220px] truncate text-[13px] text-foreground/90"
+   703→                        >
+   704→                          {renderCellValue(data[c.key])}
+   705→                        </TableCell>
+   706→                      ))}
+   707→                      <TableCell>
+   708→                        <DropdownMenu>
+   709→                          <DropdownMenuTrigger asChild>
+   710→                            <button
+   711→                              className="flex size-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+   712→                              aria-label={t.recs.recActions}
+   713→                            >
+   714→                              <MoreHorizontal className="size-4" />
+   715→                            </button>
+   716→                          </DropdownMenuTrigger>
+   717→                          <DropdownMenuContent
+   718→                            align="end"
+   719→                            className="border-border bg-popover"
+   720→                          >
+   721→                            <DropdownMenuItem
+   722→                              onClick={() => {
+   723→                                setAddingRecord(false);
+   724→                                setEditingId(rec.id);
+   725→                                setEditDraft({ ...data });
+   726→                              }}
+   727→                              disabled={isArchived}
+   728→                              className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-gold/10 focus:text-gold"
+   729→                            >
+   730→                              <Pencil className="size-3.5" /> {t.recs.edit}
+   731→                            </DropdownMenuItem>
+   732→                            <DropdownMenuItem
+   733→                              onClick={() => removeRecord.mutate(rec.id)}
+   734→                              className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-destructive/10 focus:text-destructive"
+   735→                            >
+   736→                              <Trash2 className="size-3.5" /> {t.common.delete}
+   737→                            </DropdownMenuItem>
+   738→                          </DropdownMenuContent>
+   739→                        </DropdownMenu>
+   740→                      </TableCell>
+   741→                    </TableRow>
+   742→                  );
+   743→                })}
+   744→              </TableBody>
+   745→            </Table>
+   746→          </div>
+   747→          {/* keyboard hints — OPS-DECK power-user affordance */}
+   748→          <div
+   749→            className="flex flex-wrap items-center gap-x-3 gap-y-1 px-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60"
+   750→            aria-hidden
+   751→          >
+   752→            <span className="flex items-center gap-1">
+   753→              <Kbd>J</Kbd>
+   754→              <Kbd>K</Kbd> {t.recs.kbdNav}
+   755→            </span>
+   756→            <span className="flex items-center gap-1">
+   757→              <Kbd>X</Kbd> {t.recs.kbdSelect}
+   758→            </span>
+   759→            <span className="flex items-center gap-1">
+   760→              <Kbd>E</Kbd> {t.recs.kbdEdit}
+   761→            </span>
+   762→            <span className="flex items-center gap-1">
+   763→              <Kbd>Esc</Kbd> {t.recs.kbdClear}
+   764→            </span>
+   765→          </div>
+   766→        </>
+   767→      )}
+   768→
+   769→      {/* bulk delete confirm */}
+   770→      <AlertDialog open={confirmBulk} onOpenChange={setConfirmBulk}>
+   771→        <AlertDialogContent className="border-border bg-card">
+   772→          <AlertDialogHeader>
+   773→            <AlertDialogTitle className="font-display">
+   774→              {t.recs.delBulkTitle(selected.size)}
+   775→            </AlertDialogTitle>
+   776→            <AlertDialogDescription>
+   777→              {t.recs.delBulkDesc(systemName)}
+   778→            </AlertDialogDescription>
+   779→          </AlertDialogHeader>
+   780→          <AlertDialogFooter>
+   781→            <AlertDialogCancel className="font-mono text-[11px] uppercase tracking-[0.12em]">
+   782→              {t.common.cancel}
+   783→            </AlertDialogCancel>
+   784→            <AlertDialogAction
+   785→              onClick={(e) => {
+   786→                e.preventDefault();
+   787→                bulkDelete.mutate();
+   788→              }}
+   789→              className="bg-destructive font-mono text-[11px] uppercase tracking-[0.12em] text-white hover:bg-destructive/90"
+   790→            >
+   791→              {bulkDelete.isPending ? (
+   792→                <Loader2 className="animate-spin" />
+   793→              ) : (
+   794→                t.common.delete
+   795→              )}
+   796→            </AlertDialogAction>
+   797→          </AlertDialogFooter>
+   798→        </AlertDialogContent>
+   799→      </AlertDialog>
+   800→    </section>
+   801→  );
+   802→}
+   803→

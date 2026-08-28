@@ -170,7 +170,12 @@ export function DiscoveryView() {
 
   const mutation = useMutation({
     mutationFn: () =>
-      runScan({ userId: userId!, target: target.trim(), notes: notes.trim() || undefined }),
+      runScan({
+        userId: userId!,
+        target: target.trim(),
+        notes: notes.trim() || undefined,
+        lang,
+      }),
     onSuccess: (data) => {
       const summary = parseScanSummary(
         data.scan?.result,

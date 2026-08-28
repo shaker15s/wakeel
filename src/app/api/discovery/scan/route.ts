@@ -16,7 +16,12 @@ const scanSchema = z.object({
   userId: z.string().trim().min(1, 'userId is required'),
   target: z.string().trim().min(1, 'target is required').max(200),
   notes: z.string().trim().max(1000).optional(),
+  /** operator's UI language — LLM prose is born in that language */
+  lang: z.enum(['en', 'ar']).optional(),
 })
+
+/** Language directive appended to the auditor prompt when the operator runs Arabic. */
+const AR_LANG_DIRECTIVE = `LANGUAGE DIRECTIVE: the operator runs the Arabic UI. Write EVERY human-language string (summary, description, source, capabilities) in fluent, business-appropriate Modern Standard Arabic. Keep real product names (e.g. "SAP", "Odoo") in Latin script. The category, icon and color fields MUST remain exactly as their English enum keys — only prose is Arabic. Capabilities like "إدارة جهات الاتصال" read naturally in Arabic.`
 
 const AUDITOR_SYSTEM_PROMPT = `You are a senior systems auditor performing a digital footprint analysis for Wakeel, an AI-employee operations platform. Given a company target and live web-search evidence, you identify every software system the company likely runs (CRM, ERP, finance, HR, email, storage, support...).
 
@@ -81,7 +86,44 @@ function normalizeDiscovery(raw: unknown): { summary: string; systems: Discovere
 }
 
 /** Last-resort plausible stack so the UX never dead-ends. All confidence <= 60. */
-function fallbackSystems(target: string): DiscoveredSystemInput[] {
+function fallbackSystems(target: string, lang: 'en' | 'ar'): DiscoveredSystemInput[] {
+  if (lang === 'ar') {
+    return [
+      {
+        name: `${target} CRM`,
+        description: `منصة إدارة علاقات العملاء المفترضة لدى ${target}؛ لإدارة جهات الاتصال وخط المبيعات.`,
+        category: 'CRM',
+        icon: 'Users',
+        color: '#E8B44A',
+        confidence: 50,
+        health: 72,
+        source: 'استُنتج من أعراف القطاع (أدلة محدودة)',
+        capabilities: ['إدارة جهات الاتصال', 'تتبع صفقات المبيعات', 'جدولة المتابعات'],
+      },
+      {
+        name: `${target} Finance`,
+        description: `نظام فوترة وحسابات مفترض لدى ${target}.`,
+        category: 'FINANCE',
+        icon: 'CreditCard',
+        color: '#B4832A',
+        confidence: 45,
+        health: 70,
+        source: 'استُنتج من أعراف القطاع (أدلة محدودة)',
+        capabilities: ['إصدار الفواتير', 'تتبع المصروفات', 'التسويات الشهرية'],
+      },
+      {
+        name: `${target} Drive`,
+        description: `مساحة تخزين مستندات مشتركة وتعاون مفترضة لدى ${target}.`,
+        category: 'STORAGE',
+        icon: 'HardDrive',
+        color: '#9A9184',
+        confidence: 40,
+        health: 68,
+        source: 'استُنتج من أعراف القطاع (أدلة محدودة)',
+        capabilities: ['تخزين المستندات', 'مشاركة الفريق', 'صلاحيات الوصول'],
+      },
+    ]
+  }
   return [
     {
       name: `${target} CRM`,
@@ -131,6 +173,7 @@ export async function POST(req: Request) {
       return jsonError(400, 'Invalid input: userId and target are required.')
     }
     const { userId, target, notes } = parsed.data
+    const lang = parsed.data.lang === 'ar' ? 'ar' as const : 'en' as const
 
     const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } })
     if (!user) return jsonError(404, 'User not found.')
@@ -179,18 +222,25 @@ export async function POST(req: Request) {
       .filter((line): line is string => line !== null)
       .join('\n')
 
-    const raw = await chatJSON(AUDITOR_SYSTEM_PROMPT, userPrompt)
+    const raw = await chatJSON(
+      lang === 'ar' ? `${AUDITOR_SYSTEM_PROMPT}\n\n${AR_LANG_DIRECTIVE}` : AUDITOR_SYSTEM_PROMPT,
+      userPrompt,
+    )
     const normalized = normalizeDiscovery(raw)
 
     // d. fallback so the scan never dead-ends
     const usedFallback = normalized.systems.length === 0
-    const systemsInput = usedFallback ? fallbackSystems(target) : normalized.systems
+    const systemsInput = usedFallback ? fallbackSystems(target, lang) : normalized.systems
 
     const summary =
       normalized.summary ||
       (usedFallback
-        ? `Completed an inferred audit of ${target} — live evidence was limited, so results are low-confidence.`
-        : `Completed an audit of ${target}.`)
+        ? lang === 'ar'
+          ? `أُنجز تدقيق استنتاجي لـ ${target} — الأدلة الحية كانت محدودة، لذا النتائج منخفضة الثقة.`
+          : `Completed an inferred audit of ${target} — live evidence was limited, so results are low-confidence.`
+        : lang === 'ar'
+          ? `أُنجز تدقيق أنظمة ${target}.`
+          : `Completed an audit of ${target}.`)
 
     // e. persist systems, close scan, log activity
     const created = await db.$transaction(

@@ -296,6 +296,9 @@
   .animate-forge-pulse {
     animation: forge-pulse 1.6s ease-in-out 3;
   }
+  .animate-report-in {
+    animation: report-in 1.4s cubic-bezier(0.22, 1, 0.36, 1) 1;
+  }
 }
 
 @keyframes ticker {
@@ -355,6 +358,20 @@
   }
 }
 
+/* one-shot gold materialization for proactive agent report cards */
+@keyframes report-in {
+  0% {
+    box-shadow: 0 0 0 1px rgba(232, 180, 74, 0.65),
+      0 0 34px -4px rgba(232, 180, 74, 0.4);
+    background-color: rgba(232, 180, 74, 0.14);
+  }
+  100% {
+    box-shadow: 0 0 0 1px rgba(232, 180, 74, 0),
+      0 0 0 rgba(232, 180, 74, 0);
+    background-color: rgba(232, 180, 74, 0.07);
+  }
+}
+
 /* marquee pauses when the operator reads it */
 .ticker-hover:hover .animate-ticker {
   animation-play-state: paused;
@@ -410,7 +427,8 @@ html[dir="rtl"] kbd {
   .animate-pulse-ring,
   .animate-scan-line,
   .animate-blink,
-  .animate-forge-pulse {
+  .animate-forge-pulse,
+  .animate-report-in {
     animation: none;
   }
   html {

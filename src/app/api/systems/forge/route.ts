@@ -14,7 +14,12 @@ import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
 const forgeSchema = z.object({
   userId: z.string().trim().min(1, 'userId is required'),
   prompt: z.string().trim().min(3, 'prompt is too short').max(1000),
+  /** operator's UI language — blueprint prose is born in that language */
+  lang: z.enum(['en', 'ar']).optional(),
 })
+
+/** Language directive appended to the architect prompt when the operator runs Arabic. */
+const FORGE_AR_DIRECTIVE = `LANGUAGE DIRECTIVE: the operator runs the Arabic UI. Write ALL human-language strings in fluent Modern Standard Arabic: description, capabilities, automations, entity name/plural, field labels, select options, and the human-readable parts of sample record values. Field "key"s stay camelCase Latin. The category, icon and color fields MUST remain exactly as their English enum keys. The system "name" may be Arabic or a Latin product name — match whatever the operator's request implies. Automations like "أشعر المالك عندما ينخفض المخزون تحت 10" read naturally in Arabic.`
 
 const ARCHITECT_SYSTEM_PROMPT = `You are an elite systems architect for Wakeel, an AI-employee operations platform. Given an operator's request, you design a complete, immediately-working mini-app blueprint: one entity, typed fields, and realistic sample data.
 
@@ -232,7 +237,31 @@ function normalizeForge(raw: unknown, prompt: string): ForgeResult | null {
 }
 
 /** Fallback template so a failed LLM call never dead-ends the forge. */
-function fallbackForge(prompt: string): ForgeResult {
+function fallbackForge(prompt: string, lang: 'en' | 'ar'): ForgeResult {
+  if (lang === 'ar') {
+    const fields: BlueprintField[] = [
+      { key: 'title', label: 'العنوان', type: 'text' },
+      { key: 'status', label: 'الحالة', type: 'select', options: ['مفتوح', 'قيد التنفيذ', 'مغلق'] },
+      { key: 'owner', label: 'المسؤول', type: 'text' },
+      { key: 'dueDate', label: 'تاريخ الاستحقاق', type: 'date' },
+      { key: 'priority', label: 'الأولوية', type: 'number' },
+    ]
+    return {
+      name: 'متتبّع العمليات المخصص',
+      description: `قالب احتياطي مُبنى لطلب: "${prompt.slice(0, 140)}". التوليد الحي لم يكن متاحاً — النظام قابل للتعديل بالكامل.`,
+      category: 'CUSTOM',
+      icon: 'Boxes',
+      color: '#E8B44A',
+      capabilities: ['حفظ السجلات', 'بحث وتصفية', 'تتبع الحالة'],
+      automations: [
+        'أشعر المسؤول عند إنشاء سجل جديد',
+        'علّم السجلات التي لم تُحدَّث منذ 7 أيام',
+        'ملخص أسبوعي بالتغييرات كل جمعة',
+      ],
+      entity: { name: 'سجل', plural: 'سجلات', fields, sampleRecords: synthesizeRecords(fields) },
+      fallback: true,
+    }
+  }
   const fields: BlueprintField[] = [
     { key: 'title', label: 'Title', type: 'text' },
     { key: 'status', label: 'Status', type: 'select', options: ['OPEN', 'IN_PROGRESS', 'CLOSED'] },
@@ -268,14 +297,18 @@ export async function POST(req: Request) {
       return jsonError(400, 'Invalid input: userId and prompt (3-1000 chars) are required.')
     }
     const { userId, prompt } = parsed.data
+    const lang = parsed.data.lang === 'ar' ? 'ar' as const : 'en' as const
 
     const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } })
     if (!user) return jsonError(404, 'User not found.')
 
     const userPrompt = `Operator request: "${prompt}"\n\nDesign the system blueprint now. STRICT JSON only.`
 
-    const raw = await chatJSON(ARCHITECT_SYSTEM_PROMPT, userPrompt)
-    const forge = normalizeForge(raw, prompt) ?? fallbackForge(prompt)
+    const raw = await chatJSON(
+      lang === 'ar' ? `${ARCHITECT_SYSTEM_PROMPT}\n\n${FORGE_AR_DIRECTIVE}` : ARCHITECT_SYSTEM_PROMPT,
+      userPrompt,
+    )
+    const forge = normalizeForge(raw, prompt) ?? fallbackForge(prompt, lang)
 
     const blueprint = {
       entity: forge.entity,

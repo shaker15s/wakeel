@@ -223,7 +223,12 @@ export function getSystems(userId: string) {
   );
 }
 
-export function runScan(body: { userId: string; target: string; notes?: string }) {
+export function runScan(body: {
+  userId: string;
+  target: string;
+  notes?: string;
+  lang?: "en" | "ar";
+}) {
   return api<{ scan: ScanSession; systems: AiSystem[] }>(
     "/api/discovery/scan",
     { method: "POST", body: JSON.stringify(body) }
@@ -236,7 +241,11 @@ export function getScans(userId: string) {
   );
 }
 
-export function forgeSystem(body: { userId: string; prompt: string }) {
+export function forgeSystem(body: {
+  userId: string;
+  prompt: string;
+  lang?: "en" | "ar";
+}) {
   return api<{ system: AiSystem }>("/api/systems/forge", {
     method: "POST",
     body: JSON.stringify(body),
@@ -314,10 +323,49 @@ export function importWorkspace(payload: {
 }
 
 /** POST /api/systems/[id]/seed — grow realistic sample records (LLM-backed). */
-export function seedSystem(systemId: string, count = 5) {
+export function seedSystem(systemId: string, count = 5, lang?: "en" | "ar") {
   return api<{ seeded: number; source: "llm" | "template" }>(
     `/api/systems/${encodeURIComponent(systemId)}/seed`,
-    { method: "POST", body: JSON.stringify({ count }) }
+    { method: "POST", body: JSON.stringify({ count, lang }) }
+  );
+}
+
+/**
+ * POST /api/systems/[id]/automations/suggest — AUTOMATION LAB: Wakeel proposes
+ * NEW workflows grounded in the system's blueprint + live records.
+ */
+export function suggestAutomations(systemId: string, lang?: "en" | "ar") {
+  return api<{
+    proposals: { title: string; trigger: string; action: string; why: string }[];
+    source: "llm" | "fallback";
+  }>(`/api/systems/${encodeURIComponent(systemId)}/automations/suggest`, {
+    method: "POST",
+    body: JSON.stringify({ lang }),
+  });
+}
+
+/**
+ * POST /api/systems/[id]/automations — wire a proposal into the blueprint
+ * (appends to the automations array + AUTOMATION ledger entry).
+ */
+export function wireAutomation(systemId: string, automation: string) {
+  return api<{ wired: string; total: number }>(
+    `/api/systems/${encodeURIComponent(systemId)}/automations`,
+    { method: "POST", body: JSON.stringify({ automation }) }
+  );
+}
+
+/**
+ * POST /api/systems/[id]/records/import — bulk-import mapped CSV rows. The
+ * server re-coerces every value against the blueprint's typed fields.
+ */
+export function importCsvRecords(
+  systemId: string,
+  rows: Record<string, unknown>[]
+) {
+  return api<{ imported: number; skipped: number }>(
+    `/api/systems/${encodeURIComponent(systemId)}/records/import`,
+    { method: "POST", body: JSON.stringify({ rows }) }
   );
 }
 
@@ -335,6 +383,21 @@ export function runAutomation(
 export function getAutomationRuns(systemId: string) {
   return api<{ runs: AutomationRun[] }>(
     `/api/systems/${encodeURIComponent(systemId)}/automations/run`
+  );
+}
+
+/**
+ * POST /api/agent/digest — Wakeel drafts a proactive STATUS DIGEST for a
+ * quiet system and posts it into the conversation as an AGENT message.
+ */
+export function generateDigest(
+  userId: string,
+  systemId: string,
+  lang: "en" | "ar" = "en"
+) {
+  return api<{ message: ChatMessage; usedFallback: boolean }>(
+    "/api/agent/digest",
+    { method: "POST", body: JSON.stringify({ userId, systemId, lang }) }
   );
 }
 

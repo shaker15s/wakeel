@@ -12,6 +12,7 @@ import {
   Plus,
   Sprout,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -52,6 +53,7 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/app/bits";
 import { MonoLabel } from "@/components/app/motion-bits";
+import { CsvImportDialog } from "@/components/app/console/csv-import-dialog";
 import {
   bulkDeleteRecords,
   createRecord,
@@ -61,7 +63,10 @@ import {
   updateRecord,
 } from "@/lib/api-client";
 import type { BlueprintField, SystemRecordDTO } from "@/lib/api-client";
+import { parseCsv } from "@/lib/csv";
+import type { ParsedCsv } from "@/lib/csv";
 import { useT } from "@/lib/i18n";
+import { useWakeel } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 /* --------------------------- record value rendering ------------------------ */
@@ -243,12 +248,20 @@ export function RecordsTab({
   invalidateAll: () => void;
 }) {
   const t = useT();
+  const lang = useWakeel((s) => s.lang);
   const [addingRecord, setAddingRecord] = useState(false);
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Record<string, unknown>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
+  /** CSV import state: parsed file + dialog visibility */
+  const [csvPayload, setCsvPayload] = useState<{
+    name: string;
+    csv: ParsedCsv;
+  } | null>(null);
+  const [csvOpen, setCsvOpen] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
   /** keyboard cursor — index into `records`, moved with j/k, armed with x/e */
   const [cursor, setCursor] = useState<number | null>(null);
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
@@ -284,7 +297,7 @@ export function RecordsTab({
 
   /** LLM-grown sample rows — offered right from the empty state. */
   const seed = useMutation({
-    mutationFn: () => seedSystem(systemId, 5),
+    mutationFn: () => seedSystem(systemId, 5, lang),
     onSuccess: (res) => {
       invalidateAll();
       toast.success(t.recs.seedOk, {
@@ -294,6 +307,30 @@ export function RecordsTab({
     onError: (err: Error) =>
       toast.error(t.recs.seedErr, { description: err.message }),
   });
+
+  /** read + parse the chosen CSV, then open the mapping dialog */
+  const onCsvPicked = async (file: File) => {
+    let text: string;
+    try {
+      text = await file.text();
+    } catch {
+      toast.error(t.recs.csvErr, { description: t.recs.csvParseErr });
+      return;
+    }
+    let parsed: ParsedCsv;
+    try {
+      parsed = parseCsv(text);
+    } catch {
+      toast.error(t.recs.csvErr, { description: t.recs.csvParseErr });
+      return;
+    }
+    if (parsed.headers.length === 0 || parsed.rows.length === 0) {
+      toast.error(t.recs.csvErr, { description: t.recs.csvEmptyErr });
+      return;
+    }
+    setCsvPayload({ name: file.name, csv: parsed });
+    setCsvOpen(true);
+  };
 
   const removeRecord = useMutation({
     mutationFn: (id: string) => deleteRecord(id),
@@ -401,6 +438,17 @@ export function RecordsTab({
             className="h-8 gap-1.5 rounded-sm border border-border font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-40"
           >
             <Download className="size-3" /> CSV
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => csvInputRef.current?.click()}
+            disabled={isArchived || columns.length === 0}
+            title={columns.length === 0 ? t.recs.csvNoFields : undefined}
+            aria-label={t.recs.csvImport}
+            className="h-8 gap-1.5 rounded-sm border border-gold/25 font-mono text-[10px] uppercase tracking-[0.12em] text-gold/90 hover:border-gold/50 hover:bg-gold/10 hover:text-gold disabled:opacity-40"
+          >
+            <Upload className="size-3" /> {t.recs.csvImport}
           </Button>
           <Button
             size="sm"
@@ -795,6 +843,34 @@ export function RecordsTab({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* hidden CSV picker + mapping dialog */}
+      <input
+        ref={csvInputRef}
+        type="file"
+        accept=".csv,text/csv,text/plain"
+        className="hidden"
+        aria-hidden
+        tabIndex={-1}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = ""; // allow re-picking the same file
+          if (file) void onCsvPicked(file);
+        }}
+      />
+      <CsvImportDialog
+        open={csvOpen}
+        onOpenChange={setCsvOpen}
+        systemId={systemId}
+        columns={columns}
+        csv={csvPayload?.csv ?? null}
+        fileName={csvPayload?.name ?? ""}
+        onImported={() => {
+          setCsvOpen(false);
+          setCsvPayload(null);
+          invalidateAll();
+        }}
+      />
     </section>
   );
 }

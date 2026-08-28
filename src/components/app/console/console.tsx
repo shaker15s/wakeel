@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { StatusBar } from "@/components/app/console/status-bar";
 import { MobileNav, Sidebar } from "@/components/app/console/sidebar";
@@ -15,20 +14,8 @@ import { DiscoveryView } from "@/components/app/console/views/discovery";
 import { SystemsView } from "@/components/app/console/views/systems";
 import { ForgeView } from "@/components/app/console/views/forge";
 import { ActivityView } from "@/components/app/console/views/activity";
+import { useIsLarge } from "@/lib/use-is-large";
 import { useWakeel } from "@/lib/store";
-
-/** Track the lg breakpoint (dock renders inline at ≥1024px, sheet below). */
-function useIsLarge() {
-  const [isLarge, setIsLarge] = useState(false);
-  useEffect(() => {
-    const mql = window.matchMedia("(min-width: 1024px)");
-    const update = () => setIsLarge(mql.matches);
-    update();
-    mql.addEventListener("change", update);
-    return () => mql.removeEventListener("change", update);
-  }, []);
-  return isLarge;
-}
 
 const VIEW_MOTION = {
   initial: { opacity: 0, y: 14 },

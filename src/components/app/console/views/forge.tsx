@@ -221,7 +221,8 @@ export function ForgeView() {
     .slice(0, 5);
 
   const mutation = useMutation({
-    mutationFn: () => forgeSystem({ userId: userId!, prompt: prompt.trim() }),
+    mutationFn: () =>
+      forgeSystem({ userId: userId!, prompt: prompt.trim(), lang }),
     onSuccess: (data) => {
       setLastForge(data.system);
       queryClient.invalidateQueries({ queryKey: ["systems", userId] });

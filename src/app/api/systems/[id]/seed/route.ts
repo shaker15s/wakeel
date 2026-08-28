@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { chatJSON } from '@/lib/wakeel/ai'
+import { coerce, extractFields, type TypedField } from '@/lib/wakeel/fields'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
 
 /**
@@ -15,79 +16,14 @@ import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
 
 const seedSchema = z.object({
   count: z.number().int().min(1).max(10).optional(),
+  /** operator's UI language — sample text values are born in that language */
+  lang: z.enum(['en', 'ar']).optional(),
 })
 
-const FIELD_TYPES = ['text', 'number', 'date', 'select', 'boolean'] as const
-type FieldType = (typeof FIELD_TYPES)[number]
 
-interface SeedField {
-  key: string
-  label: string
-  type: FieldType
-  options?: string[]
-}
-
-function extractFields(blueprintRaw: string): SeedField[] {
-  let bp: Record<string, unknown> = {}
-  try {
-    const parsed: unknown = JSON.parse(blueprintRaw)
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      bp = parsed as Record<string, unknown>
-    }
-  } catch {
-    return []
-  }
-  const entity = bp.entity && typeof bp.entity === 'object' && !Array.isArray(bp.entity)
-    ? (bp.entity as Record<string, unknown>)
-    : bp
-  const rawFields = Array.isArray(entity.fields) ? entity.fields : []
-  const seen = new Set<string>()
-  const fields: SeedField[] = []
-  for (const item of rawFields.slice(0, 8)) {
-    if (!item || typeof item !== 'object') continue
-    const f = item as Record<string, unknown>
-    const key = typeof f.key === 'string' && f.key.trim() ? f.key.trim().slice(0, 40) : ''
-    if (!key || seen.has(key)) continue
-    seen.add(key)
-    const label = typeof f.label === 'string' && f.label.trim() ? f.label.trim().slice(0, 60) : key
-    const rawType = typeof f.type === 'string' ? f.type.toLowerCase() : 'text'
-    if (rawType === 'select') {
-      const options = Array.isArray(f.options)
-        ? f.options.filter((o): o is string => typeof o === 'string' && o.trim() !== '').slice(0, 8)
-        : []
-      fields.push(options.length > 0 ? { key, label, type: 'select', options } : { key, label, type: 'text' })
-      continue
-    }
-    fields.push({
-      key,
-      label,
-      type: (FIELD_TYPES as readonly string[]).includes(rawType) ? (rawType as FieldType) : 'text',
-    })
-  }
-  return fields
-}
-
-function coerce(field: SeedField, value: unknown): unknown {
-  switch (field.type) {
-    case 'number': {
-      const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
-      return Number.isFinite(n) ? n : 0
-    }
-    case 'boolean':
-      return typeof value === 'boolean' ? value : value === 'true'
-    case 'select': {
-      const str = typeof value === 'string' ? value : value == null ? '' : String(value)
-      return field.options && field.options.includes(str) ? str : field.options?.[0] ?? ''
-    }
-    case 'date':
-      return typeof value === 'string' && value.trim() !== '' ? value.trim().slice(0, 40) : ''
-    default:
-      return typeof value === 'string' ? value : value == null ? '' : String(value)
-  }
-}
 
 /** Deterministic rows so seeding never fails (matches forge's synthesizer). */
-function templateRecords(fields: SeedField[], count: number): Record<string, unknown>[] {
+function templateRecords(fields: TypedField[], count: number): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = []
   for (let i = 1; i <= count; i++) {
     const rec: Record<string, unknown> = {}
@@ -121,6 +57,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const body: unknown = await req.json().catch(() => ({}))
     const parsed = seedSchema.safeParse(body ?? {})
     const count = parsed.success && parsed.data.count ? parsed.data.count : 5
+    const lang = parsed.success && parsed.data.lang === 'ar' ? 'ar' as const : 'en' as const
 
     const system = await db.aiSystem.findUnique({
       where: { id },
@@ -138,7 +75,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       .join('\n')
 
     const raw = await chatJSON(
-      `You generate realistic demo data rows for operational mini-apps. Reply with STRICT JSON ONLY — no prose, no markdown fences. Shape: {"records": [object, object, ...]}. Values MUST match each field's type exactly: numbers as JSON numbers, booleans as JSON booleans, dates as "YYYY-MM-DD", selects chosen ONLY from the field's allowed values. Rows must be internally consistent, varied and believable — like a real small business would enter them. Never repeat the same value twice in one column.`,
+      `You generate realistic demo data rows for operational mini-apps. Reply with STRICT JSON ONLY — no prose, no markdown fences. Shape: {"records": [object, object, ...]}. Values MUST match each field's type exactly: numbers as JSON numbers, booleans as JSON booleans, dates as "YYYY-MM-DD", selects chosen ONLY from the field's allowed values. Rows must be internally consistent, varied and believable — like a real small business would enter them. Never repeat the same value twice in one column.${
+        lang === 'ar'
+          ? ' LANGUAGE DIRECTIVE: the operator runs the Arabic UI — write all human-readable text values (names, titles, notes, owners…) in fluent Modern Standard Arabic. Select values must still be copied EXACTLY from the field\'s allowed options, and dates/numbers stay as-is.'
+          : ''
+      }`,
       `System: "${system.name}" — ${system.description}\nCategory: ${system.category}\nGenerate exactly ${count} rows for these fields:\n${fieldSpec}\n\nSTRICT JSON only.`,
     )
 
