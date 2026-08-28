@@ -11,6 +11,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     const systems = await db.aiSystem.findMany({
       where: { userId: id },
       orderBy: { createdAt: 'desc' },
+      include: { _count: { select: { records: true } } },
     })
     return jsonOk({ systems })
   })

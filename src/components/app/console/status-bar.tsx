@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, LogOut } from "lucide-react";
+import { Bot, LogOut, Search } from "lucide-react";
 import { toast } from "sonner";
 import { WakeelMark } from "@/components/app/logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -49,6 +49,7 @@ export function StatusBar() {
   const userId = useWakeel((s) => s.userId);
   const agentDockOpen = useWakeel((s) => s.agentDockOpen);
   const toggleAgentDock = useWakeel((s) => s.toggleAgentDock);
+  const setPaletteOpen = useWakeel((s) => s.setPaletteOpen);
   const switchOperator = useWakeel((s) => s.switchOperator);
 
   const { data } = useQuery({
@@ -107,8 +108,19 @@ export function StatusBar() {
         </span>
       </div>
 
-      {/* right: operator + dock toggle */}
+      {/* right: palette + operator + dock toggle */}
       <div className="flex items-center gap-2">
+        <button
+          onClick={() => setPaletteOpen(true)}
+          aria-label="Open command palette"
+          className="hidden h-8 items-center gap-2 rounded-sm border border-border bg-transparent px-2.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-gold/40 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 md:flex"
+        >
+          <Search className="size-3.5" />
+          <span className="hidden xl:inline">Search</span>
+          <kbd className="rounded-[3px] border border-border bg-secondary px-1 font-mono text-[9px] tracking-[0.08em]">
+            ⌘K
+          </kbd>
+        </button>
         <Button
           onClick={toggleAgentDock}
           aria-pressed={agentDockOpen}

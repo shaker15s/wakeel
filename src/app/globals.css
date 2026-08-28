@@ -334,3 +334,24 @@
       0 0 44px -6px rgba(232, 180, 74, 0.35);
   }
 }
+
+/* marquee pauses when the operator reads it */
+.ticker-hover:hover .animate-ticker {
+  animation-play-state: paused;
+}
+
+/* respect operators who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-ticker,
+  .animate-radar,
+  .animate-radar-slow,
+  .animate-pulse-ring,
+  .animate-scan-line,
+  .animate-blink,
+  .animate-forge-pulse {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}

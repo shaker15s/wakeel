@@ -9,6 +9,7 @@ import {
   AgentDockSheet,
 } from "@/components/app/console/agent-dock";
 import { SystemDetailDialog } from "@/components/app/console/system-detail-dialog";
+import { CommandPalette } from "@/components/app/console/command-palette";
 import { OverviewView } from "@/components/app/console/views/overview";
 import { DiscoveryView } from "@/components/app/console/views/discovery";
 import { SystemsView } from "@/components/app/console/views/systems";
@@ -77,6 +78,9 @@ export function Console() {
 
       {/* system detail dialog — openable from any tab */}
       <SystemDetailDialog />
+
+      {/* ⌘K command palette */}
+      <CommandPalette />
     </div>
   );
 }

@@ -113,3 +113,21 @@ Stage Summary:
 - Verified: `bun run lint` 0 errors; `tsc --noEmit` 0 errors in src/; zero browser console errors on fresh load; landing + console + all 5 views + dock verified visually at 1280px and 390px.
 - Known cosmetic note: during very long scans (>60s) the pipeline stage ticker can appear frozen in headless/background tabs due to browser timer throttling — not a code bug; the request itself completes and results render.
 - Remaining ideas for next phases: rich records (edit-in-place row), CSV export per system, per-system dashboards with recharts, automations simulation feed, Arabic UI toggle, share/read-only system links.
+---
+Task ID: 4
+Agent: webDevReview (cron round 1)
+Task: QA assessment + new features (record editing, CSV export, per-system pulse dashboard, ⌘K command palette) + styling details
+
+Work Log:
+- Reviewed worklog Task 3 + dev.log: phase stable, no new user files in upload/. QA pass via agent-browser showed a healthy app (session persisted, zero console/runtime errors on fresh load) → proceeded to feature development.
+- **Record edit-in-place** (closes the only backend-UI gap): added `updateRecord()` to api-client (PATCH /api/records/[id] existed unused), `editingId`/`editDraft` state + `editRecord` mutation in system-detail-dialog, "EDIT" item in row action menu (gold focus style, disabled when archived), prefilled dynamic edit form panel (AnimatePresence, gold-tinted, EDITING RECORD header, SAVE CHANGES + DISCARD), and gold highlight on the row being edited. Verified E2E: edited a record's name + priority via selects/switch → "Record updated" toast → table + ledger updated.
+- **CSV export**: `exportSystemCsv()` (proper quoting/escaping, kebab-case filename) + "CSV" button in the records header, disabled at 0 records. Click verified error-free (blob download can't be asserted in headless).
+- **Per-system pulse dashboard**: new "PULSE · LAST 14 DAYS" section at the top of the detail dialog — RECORDS / LAST WRITE (max updatedAt) / TYPED FIELDS stats + `RecordsPulse` gold bar chart (records per day, 14-day buckets, hover tooltips, min-height floors). Verified rendering with real data.
+- **⌘K command palette** (`command-palette.tsx`): cmdk `CommandDialog` in OPS-DECK styling — Views group (5 tabs), Open system group (top 8 with icon/origin/record-count), Agent group (open dock), Recent ledger group (last 5 activities), mono footer with workspace totals. Wired via new `paletteOpen`/`setPaletteOpen` zustand state, global ⌘K/Ctrl+K listener, `<CommandPalette/>` in Console, and a SEARCH ⌘K button in the status bar (visible md+). Verified: hotkey opens, button opens, navigation works.
+- **Backend fix**: `GET /api/users/[id]/systems` now includes `_count: { records: true }` — systems cards across registry/palette/overview now show true record counts ("4 RECORDS") instead of falling back to capability counts.
+- **Styling details**: `prefers-reduced-motion` support (all signature animations disable), ticker hover-pause fallback utility (component already had group-hover pause), sidebar nav hover now gold-tinted with subtle translate-x, status bar gained the SEARCH ⌘K affordance.
+
+Stage Summary:
+- All new features verified in-browser; lint 0 errors; tsc src/ 0 errors; zero runtime/console errors after fresh reload with error listeners armed.
+- The recurring "1 Issue" dev-tools badge is Next.js dev-mode tooling (no accompanying console/runtime errors) — not a product bug; re-confirmed clean on fresh load.
+- Next-phase candidates (unchanged priorities + new): per-system analytics tab (recharts, field completion rates), automations simulation feed, Arabic UI toggle, share/read-only system links, record keyboard navigation, multi-record bulk actions.

@@ -48,10 +48,10 @@ export function Sidebar({ className }: { className?: string }) {
             onClick={() => setConsoleTab(item.id)}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "group relative flex h-11 min-h-11 w-full items-center gap-3 rounded-sm px-3.5 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+              "group relative flex h-11 min-h-11 w-full items-center gap-3 rounded-sm px-3.5 transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
               active
                 ? "bg-secondary text-gold"
-                : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                : "text-muted-foreground hover:translate-x-0.5 hover:bg-secondary/50 hover:text-gold/90"
             )}
           >
             {active && (

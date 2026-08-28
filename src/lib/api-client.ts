@@ -256,6 +256,13 @@ export function deleteRecord(id: string) {
   });
 }
 
+export function updateRecord(id: string, data: Record<string, unknown>) {
+  return api<{ record: SystemRecordDTO }>(
+    `/api/records/${encodeURIComponent(id)}`,
+    { method: "PATCH", body: JSON.stringify({ data }) }
+  );
+}
+
 export function getActivity(userId: string) {
   return api<{ activities: Activity[] }>(
     `/api/activity?userId=${encodeURIComponent(userId)}`
