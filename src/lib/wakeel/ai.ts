@@ -12,6 +12,14 @@ import ZAI from 'z-ai-web-dev-sdk'
 
 let zaiInstance: ZAI | null = null
 
+/**
+ * Optional model override — set `WAKEEL_MODEL` in .env to route every
+ * completion to a specific model id supported by the ZAI endpoint
+ * (e.g. a bigger GLM tier). When unset, the platform default is used
+ * and NO `model` field is sent at all — identical to previous behavior.
+ */
+const WAKEEL_MODEL = process.env.WAKEEL_MODEL?.trim() || undefined
+
 export async function getZAI(): Promise<ZAI> {
   if (!zaiInstance) {
     zaiInstance = await ZAI.create()
@@ -86,6 +94,7 @@ export async function chatJSON(systemPrompt: string, userPrompt: string): Promis
     try {
       const zai = await getZAI()
       const response: unknown = await zai.chat.completions.create({
+        ...(WAKEEL_MODEL ? { model: WAKEEL_MODEL } : {}),
         messages: [
           { role: 'assistant', content: systemPrompt },
           { role: 'user', content: userPrompt },
@@ -120,6 +129,7 @@ export async function chatText(systemPrompt: string, messages: ChatTurn[]): Prom
   try {
     const zai = await getZAI()
     const response: unknown = await zai.chat.completions.create({
+      ...(WAKEEL_MODEL ? { model: WAKEEL_MODEL } : {}),
       messages: [
         { role: 'assistant', content: systemPrompt },
         ...messages,
@@ -147,6 +157,7 @@ export async function chatTextStream(
   try {
     const zai = await getZAI()
     const response: unknown = await zai.chat.completions.create({
+      ...(WAKEEL_MODEL ? { model: WAKEEL_MODEL } : {}),
       messages: [
         { role: 'assistant', content: systemPrompt },
         ...messages,

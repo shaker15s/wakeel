@@ -290,3 +290,17 @@ Stage Summary:
 - Honest sellability verdict (unchanged from Task 11, reiterated): core loops are REAL and working (chat/discovery/forge/CRUD/import-export/share/tour); blockers for sale = server-side auth, rate limiting/cost caps, hosted deploy, payments/legal, clean demo data.
 - Risks/notes: (1) tour + boot overlap is timed (3s grace) — if boot line copy grows much longer, bump BOOT_GRACE_MS; (2) `agent-browser set viewport <w> <h>` is the working subcommand on this build (`viewport`/`resize` standalone forms don't exist); (3) test operators accumulated again (QA Probe, Mona Solid).
 - Recommended next phase (priority order): (1) server-side auth (NextAuth) + server-scoped operators — THE sale blocker; (2) rate-limit/token-cap middleware on LLM routes; (3) deploy pipeline + hosted DB + domain; (4) "SEE A LIVE CONSOLE" demo prospect workspace with read-only share link on landing; (5) chat streaming for the dock.
+---
+Task ID: 13
+Agent: orchestrator (Z.ai Code) — user-triggered round
+Task: User asked (EG-Arabic): where does the model API come from (it's not free)? How can I change the model?
+
+Work Log:
+- Traced the full AI wiring: exactly ONE file imports the SDK — src/lib/wakeel/ai.ts (getZAI singleton + runWebSearch + chatJSON + chatText + chatTextStream). 6 API routes consume it (agent/chat, agent/digest, systems/forge, systems/[id]/seed, systems/[id]/automations/suggest, discovery/scan). No API key in project .env (only DATABASE_URL) — credentials/connection are managed by the Z.ai sandbox platform; in production deploys the operator needs their own key/plan.
+- Read SDK types (node_modules/z-ai-web-dev-sdk/dist/index.d.ts): CreateChatCompletionBody accepts optional `model?: string` — verified.
+- **Feature — WAKEEL_MODEL env override**: ai.ts now reads `process.env.WAKEEL_MODEL` once at module load and spreads `model` into ALL THREE completion call-sites (chatJSON/chatText/chatTextStream) when set; when unset NO model field is sent → byte-identical to previous behavior (zero-risk default). Added commented usage block to .env.
+- Verified: lint 0, tsc 0 (app), live curl POST /api/agent/chat after the change returns correct LLM reply ("MODEL CHECK OK") on the default path.
+
+Stage Summary:
+- Answer recorded: API source = z-ai-web-dev-sdk provided by the sandbox platform (GLM behind it); swapping models is now a one-line .env change (WAKEEL_MODEL); swapping PROVIDERS (OpenAI/Anthropic/etc.) = rewriting only ai.ts (responses are already OpenAI-shaped {choices[].message.content}).
+- Next phase priorities unchanged from Task 12 (auth → rate limits → deploy).
