@@ -22,6 +22,7 @@ const FILTERS: Array<"ALL" | ActivityType> = [
   "SCAN",
   "FORGE",
   "RECORD",
+  "AUTOMATION",
   "CHAT",
   "STATUS",
   "DELETE",

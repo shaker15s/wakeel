@@ -29,7 +29,8 @@ export type ActivityType =
   | "DELETE"
   | "RECORD"
   | "CHAT"
-  | "STATUS";
+  | "STATUS"
+  | "AUTOMATION";
 
 export interface Operator {
   id: string;
@@ -107,6 +108,25 @@ export interface SystemRecordDTO {
   data: unknown;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AutomationLogLine {
+  /** ms offset from run start */
+  t: number;
+  line: string;
+  level: "info" | "ok" | "warn" | "error";
+}
+
+export interface AutomationRun {
+  id: string;
+  systemId: string;
+  automation: string;
+  status: "RUNNING" | "DONE" | "FAILED";
+  trigger: "MANUAL" | "SCHEDULE" | "EVENT";
+  /** JSON string — parse with parseRunLog() before use */
+  log: string;
+  durationMs: number;
+  createdAt: string;
 }
 
 export interface BlueprintField {
@@ -263,6 +283,30 @@ export function updateRecord(id: string, data: Record<string, unknown>) {
   );
 }
 
+export function bulkDeleteRecords(ids: string[]) {
+  return api<{ ok: boolean; deleted: number }>("/api/records/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+  });
+}
+
+export function runAutomation(
+  systemId: string,
+  automation: string,
+  trigger: "MANUAL" | "SCHEDULE" | "EVENT" = "MANUAL"
+) {
+  return api<{ run: AutomationRun }>(
+    `/api/systems/${encodeURIComponent(systemId)}/automations/run`,
+    { method: "POST", body: JSON.stringify({ automation, trigger }) }
+  );
+}
+
+export function getAutomationRuns(systemId: string) {
+  return api<{ runs: AutomationRun[] }>(
+    `/api/systems/${encodeURIComponent(systemId)}/automations/run`
+  );
+}
+
 export function getActivity(userId: string) {
   return api<{ activities: Activity[] }>(
     `/api/activity?userId=${encodeURIComponent(userId)}`
@@ -368,7 +412,11 @@ export function parseBlueprint(raw: unknown): ParsedBlueprint {
     (typeof obj.purpose === "string" && obj.purpose) ||
     "";
 
-  const automations = toStringArray(obj.automations);
+  const automations = toStringArray(
+    Array.isArray(obj.automations) && obj.automations.length > 0
+      ? obj.automations
+      : asRecord(obj.entity)?.automations
+  );
   const views = toStringArray(obj.views);
   const sampleCandidates = [obj.sampleRecords, obj.sample_data, obj.samples];
   const rawSamples = sampleCandidates.find((c) => Array.isArray(c));
@@ -400,6 +448,33 @@ export function parseCapabilities(raw: unknown): string[] {
 /** Parse a record's `data` (string or object) into a plain object. */
 export function parseRecordData(raw: unknown): Record<string, unknown> {
   return asRecord(raw) ?? {};
+}
+
+/** Parse an automation run's log JSON into normalized log lines. */
+export function parseRunLog(raw: unknown): AutomationLogLine[] {
+  if (typeof raw !== "string") return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item): AutomationLogLine | null => {
+        if (!item || typeof item !== "object") return null;
+        const rec = item as Record<string, unknown>;
+        if (typeof rec.line !== "string") return null;
+        const level =
+          rec.level === "ok" || rec.level === "warn" || rec.level === "error"
+            ? rec.level
+            : "info";
+        return {
+          t: typeof rec.t === "number" ? rec.t : 0,
+          line: rec.line,
+          level,
+        };
+      })
+      .filter((l): l is AutomationLogLine => l !== null);
+  } catch {
+    return [];
+  }
 }
 
 /** Parse a scan result JSON into a readable summary line. */

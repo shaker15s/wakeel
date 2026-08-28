@@ -26,6 +26,7 @@ Reply with STRICT JSON ONLY — no prose, no markdown fences. Shape:
   "icon": string,            // exactly one lucide name from: ${SYSTEM_ICONS.join(', ')}
   "color": string,           // exactly one of: ${SYSTEM_COLORS.join(', ')}
   "capabilities": string[],  // 3-5 short capability phrases, e.g. "Low-stock alerts"
+  "automations": string[],   // 2-4 workflow descriptions this system should automate, e.g. "Notify the owner when stock drops below 10"
   "entity": {
     "name": string,          // singular entity name, e.g. "item"
     "plural": string,        // plural entity name, e.g. "items"
@@ -35,7 +36,7 @@ Reply with STRICT JSON ONLY — no prose, no markdown fences. Shape:
     "sampleRecords": [ {...}, {...}, {...} ]  // exactly 3 objects, keyed by field key
   }
 }
-Rules: field keys must be unique camelCase strings; include "options" ONLY for select fields (3-6 options). Sample record values MUST match field types — numbers as JSON numbers, booleans as JSON booleans, dates as "YYYY-MM-DD" strings, selects chosen from the field's own options. Never use blue or indigo colors.`
+Rules: field keys must be unique camelCase strings; include "options" ONLY for select fields (3-6 options). Sample record values MUST match field types — numbers as JSON numbers, booleans as JSON booleans, dates as "YYYY-MM-DD" strings, selects chosen from the field's own options. Automations must be concrete, trigger→action sentences tied to this entity's fields (max 90 chars each). Never use blue or indigo colors.`
 
 const FIELD_TYPES = ['text', 'number', 'date', 'select', 'boolean'] as const
 type FieldType = (typeof FIELD_TYPES)[number]
@@ -61,6 +62,7 @@ interface ForgeResult {
   icon: string
   color: string
   capabilities: string[]
+  automations: string[]
   entity: BlueprintEntity
   fallback: boolean
 }
@@ -191,6 +193,17 @@ function normalizeForge(raw: unknown, prompt: string): ForgeResult | null {
     ? obj.capabilities.filter((c): c is string => typeof c === 'string' && c.trim() !== '').slice(0, 6)
     : []
 
+  // automations may live at .automations or .entity.automations
+  const rawAutomations = Array.isArray(obj.automations)
+    ? obj.automations
+    : Array.isArray(entityRaw.automations)
+      ? entityRaw.automations
+      : []
+  const automations = rawAutomations
+    .filter((a): a is string => typeof a === 'string' && a.trim() !== '')
+    .map((a) => a.trim().slice(0, 140))
+    .slice(0, 4)
+
   return {
     name,
     description:
@@ -201,6 +214,13 @@ function normalizeForge(raw: unknown, prompt: string): ForgeResult | null {
     icon: safeIcon(obj.icon),
     color: safeColor(obj.color),
     capabilities: capabilities.length > 0 ? capabilities : ['Record keeping', 'Search & filter', 'Status tracking'],
+    automations:
+      automations.length > 0
+        ? automations
+        : [
+          `Notify the owner when a new ${entityName} is created`,
+          `Weekly digest of ${entityPlural} updated in the last 7 days`,
+        ],
     entity: {
       name: entityName,
       plural: entityPlural,
@@ -227,6 +247,11 @@ function fallbackForge(prompt: string): ForgeResult {
     icon: 'Boxes',
     color: '#E8B44A',
     capabilities: ['Record keeping', 'Search & filter', 'Status tracking'],
+    automations: [
+      'Notify the owner when a new record is created',
+      'Flag records untouched for 7 days',
+      'Weekly digest of changes every Friday',
+    ],
     entity: { name: 'record', plural: 'records', fields, sampleRecords: synthesizeRecords(fields) },
     fallback: true,
   }
@@ -254,6 +279,7 @@ export async function POST(req: Request) {
 
     const blueprint = {
       entity: forge.entity,
+      automations: forge.automations,
       prompt,
       generatedAt: new Date().toISOString(),
       fallback: forge.fallback,

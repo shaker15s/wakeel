@@ -197,6 +197,26 @@
     text-shadow: 0 0 24px rgba(232, 180, 74, 0.35);
   }
 
+  /* extra-slim inline scrollbar for tight console panels (logs, ledgers) */
+  .wakeel-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(232, 180, 74, 0.25) transparent;
+  }
+  .wakeel-scrollbar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .wakeel-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .wakeel-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(232, 180, 74, 0.22);
+    border-radius: 8px;
+  }
+  .wakeel-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(232, 180, 74, 0.5);
+  }
+
   /* CRT scan lines for console mocks */
   .scan-lines {
     background-image: repeating-linear-gradient(

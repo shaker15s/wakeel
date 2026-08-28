@@ -113,6 +113,7 @@ const TYPE_COLORS: Record<string, string> = {
   DELETE: "text-destructive border-destructive/40 bg-destructive/10",
   ARCHIVE: "text-muted-foreground border-muted-foreground/30 bg-muted-foreground/5",
   RESTORE: "text-live border-live/40 bg-live/10",
+  AUTOMATION: "text-gold border-gold/30 bg-gold/5",
 };
 
 export function TypeChip({
