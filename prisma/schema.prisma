@@ -1,0 +1,96 @@
+// WAKEEL (وكيل) — AI Employee Platform — Prisma schema
+// NOTE: Prisma primitives cannot be lists. All JSON payloads (blueprint,
+// capabilities, record data, scan results) are stored as String.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String        @id @default(cuid())
+  name      String
+  workspace String
+  role      String?
+  createdAt DateTime      @default(now())
+  systems   AiSystem[]
+  scans     ScanSession[]
+  activities Activity[]
+  chats     ChatMessage[]
+}
+
+model AiSystem {
+  id           String         @id @default(cuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  description  String
+  category     String // CRM | ERP | FINANCE | HR | COMMUNICATION | STORAGE | MARKETING | SUPPORT | OPERATIONS | CUSTOM
+  icon         String // lucide icon name
+  color        String
+  origin       String // DISCOVERED | CREATED
+  status       String         @default("ACTIVE") // ACTIVE | DRAFT | ARCHIVED
+  health       Int            @default(90)
+  confidence   Int?
+  source       String?
+  blueprint    String         @default("{}")
+  capabilities String         @default("[]")
+  records      SystemRecord[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([userId])
+}
+
+model SystemRecord {
+  id        String   @id @default(cuid())
+  systemId  String
+  system    AiSystem @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  data      String // JSON string
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([systemId])
+}
+
+model ScanSession {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  target       String
+  notes        String?
+  status       String   @default("RUNNING") // RUNNING | COMPLETE | FAILED
+  systemsFound Int      @default(0)
+  result       String   @default("{}") // JSON string {summary, searchedAt, queryCount}
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String // SCAN | FORGE | ADOPT | ARCHIVE | RESTORE | DELETE | RECORD | CHAT | STATUS
+  title     String
+  detail    String?
+  status    String   @default("DONE") // RUNNING | DONE | FAILED
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String // USER | AGENT
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}

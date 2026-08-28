@@ -1,0 +1,160 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import { Archive, Boxes, Radar } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  CategoryChip,
+  EmptyState,
+  HealthBar,
+  OriginBadge,
+  StatusDot,
+  systemIcon,
+} from "@/components/app/bits";
+import { MonoLabel } from "@/components/app/motion-bits";
+import { getSystems, parseCapabilities, recordCount } from "@/lib/api-client";
+import { useWakeel } from "@/lib/store";
+
+const GRID_ART = `  ┌───┐ ┌───┐ ┌───┐
+  │ ▦ │ │ ▦ │ │ ▦ │
+  └───┘ └───┘ └───┘
+  NO SYSTEMS MAPPED`;
+
+export function SystemsView() {
+  const userId = useWakeel((s) => s.userId);
+  const openSystemDetail = useWakeel((s) => s.openSystemDetail);
+  const setConsoleTab = useWakeel((s) => s.setConsoleTab);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["systems", userId],
+    queryFn: () => getSystems(userId!),
+    enabled: !!userId,
+    refetchInterval: 30_000,
+  });
+
+  const systems = data?.systems ?? [];
+  const activeCount = systems.filter((s) => s.status === "ACTIVE").length;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-1.5">
+          <MonoLabel gold>[ REGISTRY ]</MonoLabel>
+          <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
+            SYSTEMS
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {isLoading
+              ? "Loading your registry…"
+              : `${systems.length} system${systems.length === 1 ? "" : "s"} · ${activeCount} active · discovered and forged by Wakeel.`}
+          </p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-36 rounded-lg" />
+          ))}
+        </div>
+      ) : systems.length === 0 ? (
+        <EmptyState
+          art={GRID_ART}
+          title="REGISTRY EMPTY"
+          copy="Nothing in your workspace yet. Run a discovery sweep to adopt existing systems, or forge a brand-new one from a sentence."
+        >
+          <Button
+            onClick={() => setConsoleTab("discovery")}
+            size="sm"
+            className="bg-primary font-mono text-[10px] uppercase tracking-[0.14em] text-primary-foreground hover:bg-gold-pale"
+          >
+            <Radar className="size-3.5" /> Run discovery
+          </Button>
+          <Button
+            onClick={() => setConsoleTab("forge")}
+            size="sm"
+            variant="ghost"
+            className="border border-border font-mono text-[10px] uppercase tracking-[0.14em]"
+          >
+            <Boxes className="size-3.5" /> Forge system
+          </Button>
+        </EmptyState>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {systems.map((system, i) => {
+            const Icon = systemIcon(system.icon);
+            const count = recordCount(system);
+            const capabilities = parseCapabilities(system.capabilities);
+            const isArchived = system.status === "ARCHIVED";
+            return (
+              <motion.button
+                key={system.id}
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.4,
+                  delay: (i % 6) * 0.05,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+                whileHover={{ y: -4 }}
+                onClick={() => openSystemDetail(system.id)}
+                className={`group flex flex-col gap-3 rounded-lg border bg-card p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 ${
+                  isArchived
+                    ? "border-border/60 opacity-60 hover:border-border"
+                    : "border-border hover:border-gold/40"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-sm border border-border bg-secondary text-muted-foreground transition-colors group-hover:border-gold/40 group-hover:text-gold">
+                    <Icon className="size-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {system.name}
+                      </p>
+                      <StatusDot status={system.status} />
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <CategoryChip category={system.category} />
+                      <OriginBadge origin={system.origin} />
+                    </div>
+                  </div>
+                </div>
+
+                {system.description && (
+                  <p className="line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">
+                    {system.description}
+                  </p>
+                )}
+
+                <div className="mt-auto flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <HealthBar value={system.health} className="flex-1" />
+                    <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                      {system.health}%
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/70">
+                    <span>
+                      {count != null
+                        ? `${count} RECORD${count === 1 ? "" : "S"}`
+                        : `${capabilities.length} CAPABILIT${capabilities.length === 1 ? "Y" : "IES"}`}
+                    </span>
+                    {isArchived && (
+                      <span className="flex items-center gap-1">
+                        <Archive className="size-3" /> ARCHIVED
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </motion.button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

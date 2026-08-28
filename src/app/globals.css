@@ -1,0 +1,336 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-display);
+  --font-mono: var(--font-mono-data);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  /* OPS DECK extended palette */
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-gold-pale: var(--gold-pale);
+  --color-live: var(--live);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/*
+ * WAKEEL — OPS DECK design system.
+ * Dark is the ONLY theme. Warm near-black base, gold ops accent,
+ * cream text. No indigo/blue anywhere.
+ */
+:root {
+  --radius: 0.375rem;
+  --gold: #e8b44a;
+  --gold-deep: #b4832a;
+  --gold-pale: #f2d492;
+  --live: #3ecf8e;
+  --background: #0a0908;
+  --foreground: #f5efe4;
+  --card: #12100d;
+  --card-foreground: #f5efe4;
+  --popover: #12100d;
+  --popover-foreground: #f5efe4;
+  --primary: #e8b44a;
+  --primary-foreground: #0a0908;
+  --secondary: #181510;
+  --secondary-foreground: #f5efe4;
+  --muted: #181510;
+  --muted-foreground: #9a9184;
+  --accent: #181510;
+  --accent-foreground: #f5efe4;
+  --destructive: #e5533d;
+  --border: rgba(245, 239, 228, 0.08);
+  --input: rgba(245, 239, 228, 0.1);
+  --ring: #e8b44a;
+  --chart-1: #e8b44a;
+  --chart-2: #3ecf8e;
+  --chart-3: #b4832a;
+  --chart-4: #f2d492;
+  --chart-5: #e5533d;
+  --sidebar: #0c0a08;
+  --sidebar-foreground: #f5efe4;
+  --sidebar-primary: #e8b44a;
+  --sidebar-primary-foreground: #0a0908;
+  --sidebar-accent: #181510;
+  --sidebar-accent-foreground: #f5efe4;
+  --sidebar-border: rgba(245, 239, 228, 0.08);
+  --sidebar-ring: #e8b44a;
+}
+
+/* dark is the brand — mirror the same values */
+.dark {
+  --radius: 0.375rem;
+  --gold: #e8b44a;
+  --gold-deep: #b4832a;
+  --gold-pale: #f2d492;
+  --live: #3ecf8e;
+  --background: #0a0908;
+  --foreground: #f5efe4;
+  --card: #12100d;
+  --card-foreground: #f5efe4;
+  --popover: #12100d;
+  --popover-foreground: #f5efe4;
+  --primary: #e8b44a;
+  --primary-foreground: #0a0908;
+  --secondary: #181510;
+  --secondary-foreground: #f5efe4;
+  --muted: #181510;
+  --muted-foreground: #9a9184;
+  --accent: #181510;
+  --accent-foreground: #f5efe4;
+  --destructive: #e5533d;
+  --border: rgba(245, 239, 228, 0.08);
+  --input: rgba(245, 239, 228, 0.1);
+  --ring: #e8b44a;
+  --chart-1: #e8b44a;
+  --chart-2: #3ecf8e;
+  --chart-3: #b4832a;
+  --chart-4: #f2d492;
+  --chart-5: #e5533d;
+  --sidebar: #0c0a08;
+  --sidebar-foreground: #f5efe4;
+  --sidebar-primary: #e8b44a;
+  --sidebar-primary-foreground: #0a0908;
+  --sidebar-accent: #181510;
+  --sidebar-accent-foreground: #f5efe4;
+  --sidebar-border: rgba(245, 239, 228, 0.08);
+  --sidebar-ring: #e8b44a;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  ::selection {
+    background: #e8b44a;
+    color: #0a0908;
+  }
+  /* thin mission-control scrollbar — gold thumb on hover */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(232, 180, 74, 0.14);
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(232, 180, 74, 0.45);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(232, 180, 74, 0.18) transparent;
+  }
+}
+
+@layer utilities {
+  .font-arabic {
+    font-family: var(--font-arabic), sans-serif;
+  }
+
+  /* fine gold blueprint grid, 32px intervals */
+  .bg-blueprint {
+    background-image: linear-gradient(
+        to right,
+        rgba(232, 180, 74, 0.05) 1px,
+        transparent 1px
+      ),
+      linear-gradient(to bottom, rgba(232, 180, 74, 0.05) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  /* film-grain overlay (place inside a relative parent) */
+  .noise {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+  }
+
+  .text-glow {
+    text-shadow: 0 0 24px rgba(232, 180, 74, 0.35);
+  }
+
+  /* CRT scan lines for console mocks */
+  .scan-lines {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      rgba(245, 239, 228, 0.03) 0px,
+      rgba(245, 239, 228, 0.03) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+  }
+
+  /* targeting corner brackets — one pseudo-element, 8 gradient ticks */
+  .corner-frame {
+    position: relative;
+    --ck: rgba(232, 180, 74, 0.45);
+    --cl: 14px;
+  }
+  .corner-frame::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    pointer-events: none;
+    z-index: 1;
+    background-image: linear-gradient(var(--ck), var(--ck)),
+      linear-gradient(var(--ck), var(--ck)),
+      linear-gradient(var(--ck), var(--ck)),
+      linear-gradient(var(--ck), var(--ck)),
+      linear-gradient(var(--ck), var(--ck)),
+      linear-gradient(var(--ck), var(--ck)),
+      linear-gradient(var(--ck), var(--ck)),
+      linear-gradient(var(--ck), var(--ck));
+    background-position: top left, top left, top right, top right, bottom left,
+      bottom left, bottom right, bottom right;
+    background-size: var(--cl) 1px, 1px var(--cl), var(--cl) 1px, 1px var(--cl),
+      var(--cl) 1px, 1px var(--cl), var(--cl) 1px, 1px var(--cl);
+    background-repeat: no-repeat;
+  }
+  /* hover: brackets expand outward + lift + gold glow */
+  .corner-frame-hover {
+    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .corner-frame-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 44px -14px rgba(232, 180, 74, 0.18),
+      0 0 0 1px rgba(232, 180, 74, 0.12);
+  }
+  .corner-frame-hover:hover::before {
+    --ck: rgba(232, 180, 74, 0.95);
+    --cl: 22px;
+  }
+
+  /* huge ghost mono numbers (01 / 02 / 03) */
+  .ghost-number {
+    color: transparent;
+    -webkit-text-stroke: 1px rgba(232, 180, 74, 0.32);
+  }
+
+  .animate-ticker {
+    animation: ticker 46s linear infinite;
+  }
+  .animate-radar {
+    animation: radar-sweep 4.5s linear infinite;
+  }
+  .animate-radar-slow {
+    animation: radar-sweep 16s linear infinite;
+  }
+  .animate-pulse-ring {
+    animation: pulse-ring 2.4s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+  }
+  .animate-scan-line {
+    animation: scan-line 3.4s ease-in-out infinite;
+  }
+  .animate-blink {
+    animation: blink 1.1s ease-in-out infinite;
+  }
+  .animate-forge-pulse {
+    animation: forge-pulse 1.6s ease-in-out 3;
+  }
+}
+
+@keyframes ticker {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes radar-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+@keyframes scan-line {
+  0% {
+    top: -2%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 102%;
+    opacity: 0;
+  }
+}
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+@keyframes forge-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(232, 180, 74, 0.3),
+      0 0 0 rgba(232, 180, 74, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(232, 180, 74, 0.75),
+      0 0 44px -6px rgba(232, 180, 74, 0.35);
+  }
+}
