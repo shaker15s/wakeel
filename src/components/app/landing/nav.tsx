@@ -12,6 +12,7 @@ export function Nav() {
   const lang = useWakeel((s) => s.lang);
   const setOnboardingOpen = useWakeel((s) => s.setOnboardingOpen);
   const userId = useWakeel((s) => s.userId);
+  const session = useWakeel((s) => s.session);
   const setView = useWakeel((s) => s.setView);
 
   // gold reading-progress bar pinned to the very top of the viewport
@@ -23,8 +24,13 @@ export function Nav() {
   });
 
   const enter = () => {
-    if (userId) setView("console");
-    else setOnboardingOpen(true);
+    if (session) {
+      if (userId) setView("console");
+      else setOnboardingOpen(true);
+    } else {
+      // unauthenticated → AppShell swaps the console view for the auth gate
+      setView("console");
+    }
   };
 
   const LINKS = [

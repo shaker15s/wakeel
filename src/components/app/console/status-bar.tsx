@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Compass, Download, LogOut, Search, Upload } from "lucide-react";
+import { ArrowLeftRight, Bot, Compass, Download, LogOut, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { WakeelMark } from "@/components/app/logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -22,6 +22,7 @@ import {
   getSystems,
   getSystemDetail,
   getUser,
+  logoutAccount,
   parseBlueprint,
   parseCapabilities,
   parseRecordData,
@@ -64,6 +65,7 @@ export function StatusBar() {
   const setPaletteOpen = useWakeel((s) => s.setPaletteOpen);
   const setTourOpen = useWakeel((s) => s.setTourOpen);
   const switchOperator = useWakeel((s) => s.switchOperator);
+  const session = useWakeel((s) => s.session);
   const setUserId = useWakeel((s) => s.setUserId);
   const setConsoleTab = useWakeel((s) => s.setConsoleTab);
   const queryClient = useQueryClient();
@@ -94,6 +96,18 @@ export function StatusBar() {
     toast(t.sb.switchedTitle, {
       description: t.sb.switchedDesc,
     });
+  };
+
+  /** Full server-side sign-out: kill the httpOnly cookie, scrub the UI. */
+  const handleSignOut = async () => {
+    try {
+      await logoutAccount();
+      switchOperator(); // scrubs hash + resets all view state to landing
+      useWakeel.setState({ session: null, sessionChecked: true });
+      toast.success(t.sb.signOutOk, { description: t.sb.signOutOkDesc });
+    } catch {
+      toast.error(t.sb.signOutErr);
+    }
   };
 
   const [exporting, setExporting] = useState(false);
@@ -287,6 +301,11 @@ export function StatusBar() {
             <DropdownMenuLabel className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
               {user ? `${user.name} · ${user.workspace}` : "OPERATOR"}
             </DropdownMenuLabel>
+            {session && (
+              <DropdownMenuLabel className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/60">
+                {t.sb.accountSection} · {session.email}
+              </DropdownMenuLabel>
+            )}
             <DropdownMenuSeparator className="bg-border" />
             <DropdownMenuLabel className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/60">
               {t.sb.workspaceSection}
@@ -337,7 +356,13 @@ export function StatusBar() {
               onClick={handleSwitch}
               className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-secondary focus:text-gold"
             >
-              <LogOut className="size-3.5" /> {t.sb.switchOp}
+              <ArrowLeftRight className="size-3.5" /> {t.sb.switchOp}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => void handleSignOut()}
+              className="gap-2 font-mono text-[11px] uppercase tracking-[0.1em] focus:bg-secondary focus:text-gold"
+            >
+              <LogOut className="size-3.5" /> {t.sb.signOut}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

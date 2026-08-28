@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import { safeCategory, safeColor, safeIcon } from '@/lib/wakeel/constants'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+import { requireSession } from '@/lib/auth'
+import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
 
 /**
  * POST /api/workspace/import — restore a `wakeel.workspace/v1` export file
@@ -153,9 +155,14 @@ function normalizeBlueprint(raw: unknown): string {
   })
 }
 
-/** POST handler — import + restore in one shot. */
+/** POST handler — import + restore in one atomic shot (owner-scoped). */
 export async function POST(req: Request) {
   return handleRoute(async () => {
+    const guard = await requireSession(req)
+    if (!guard.ok) return guard.res
+    const rl = rateLimit(`import:${guard.account.id}`, LIMITS.importWorkspace)
+    if (!rl.ok) return tooManyRequests(rl, 'Import rate limit reached — try again shortly.')
+
     const body: unknown = await req.json().catch(() => null)
     if (
       body && typeof body === 'object' && 'format' in body &&
@@ -171,46 +178,55 @@ export async function POST(req: Request) {
 
     const recordTotal = rawSystems.reduce((n, s) => n + (s.records?.length ?? 0), 0)
 
-    const user = await db.user.create({
-      data: {
-        name: operator.name,
-        workspace: operator.workspace,
-        role: operator.role ?? null,
-      },
-    })
-
-    let importedRecords = 0
-    for (const s of rawSystems) {
-      const system = await db.aiSystem.create({
-        data: {
-          userId: user.id,
-          name: s.name,
-          description: s.description?.slice(0, 500) ?? '',
-          category: safeCategory(s.category),
-          icon: safeIcon(s.icon),
-          color: safeColor(s.color),
-          origin: s.origin === 'DISCOVERED' ? 'DISCOVERED' : 'CREATED',
-          status: s.status === 'DRAFT' || s.status === 'ARCHIVED' ? s.status : 'ACTIVE',
-          health: typeof s.health === 'number' ? s.health : 90,
-          confidence: s.confidence ?? null,
-          source: s.source ?? null,
-          blueprint: normalizeBlueprint(s.blueprint),
-          capabilities: JSON.stringify(s.capabilities ?? []),
-        },
-      })
-      if (s.records && s.records.length > 0) {
-        await db.systemRecord.createMany({
-          data: s.records.slice(0, 500).map((r) => ({
-            systemId: system.id,
-            data: JSON.stringify(r.data),
-            ...(r.createdAt && !Number.isNaN(+new Date(r.createdAt))
-              ? { createdAt: new Date(r.createdAt), updatedAt: new Date(r.createdAt) }
-              : {}),
-          })),
+    // ATOMIC import: operator + all systems + all records commit together or
+    // not at all — a mid-loop failure can no longer orphan partial data.
+    const { user, importedRecords } = await db.$transaction(
+      async (tx) => {
+        const created = await tx.user.create({
+          data: {
+            accountId: guard.account.id,
+            name: operator.name,
+            workspace: operator.workspace,
+            role: operator.role ?? null,
+          },
         })
-        importedRecords += Math.min(s.records.length, 500)
-      }
-    }
+
+        let records = 0
+        for (const s of rawSystems) {
+          const system = await tx.aiSystem.create({
+            data: {
+              userId: created.id,
+              name: s.name,
+              description: s.description?.slice(0, 500) ?? '',
+              category: safeCategory(s.category),
+              icon: safeIcon(s.icon),
+              color: safeColor(s.color),
+              origin: s.origin === 'DISCOVERED' ? 'DISCOVERED' : 'CREATED',
+              status: s.status === 'DRAFT' || s.status === 'ARCHIVED' ? s.status : 'ACTIVE',
+              health: typeof s.health === 'number' ? s.health : 90,
+              confidence: s.confidence ?? null,
+              source: s.source ?? null,
+              blueprint: normalizeBlueprint(s.blueprint),
+              capabilities: JSON.stringify(s.capabilities ?? []),
+            },
+          })
+          if (s.records && s.records.length > 0) {
+            await tx.systemRecord.createMany({
+              data: s.records.slice(0, 500).map((r) => ({
+                systemId: system.id,
+                data: JSON.stringify(r.data),
+                ...(r.createdAt && !Number.isNaN(+new Date(r.createdAt))
+                  ? { createdAt: new Date(r.createdAt), updatedAt: new Date(r.createdAt) }
+                  : {}),
+              })),
+            })
+            records += Math.min(s.records.length, 500)
+          }
+        }
+        return { user: created, importedRecords: records }
+      },
+      { maxWait: 5_000, timeout: 30_000 },
+    )
 
     await db.activity.create({
       data: {

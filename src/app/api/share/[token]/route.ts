@@ -1,6 +1,8 @@
 import { db } from '@/lib/db'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
 import { parseBlueprint } from '@/lib/api-client'
+import { clientIp } from '@/lib/auth'
+import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,13 +10,17 @@ export const dynamic = 'force-dynamic'
  * GET /api/share/[token] — PUBLIC read-only payload for a shared system.
  * Deliberately minimal: no owner ids, no emails, no mutation surface.
  * Token must be live (not revoked); every successful fetch counts a view.
+ * Public route — still IP-rate-limited to blunt scraping/farming.
  */
-export async function GET(_req: Request, ctx: { params: Promise<{ token: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ token: string }> }) {
   return handleRoute(async () => {
     const { token } = await ctx.params
     if (!token || token.length < 8 || token.length > 80) {
       return jsonError(400, 'Malformed share token.')
     }
+
+    const rl = rateLimit(`share:${clientIp(req)}`, LIMITS.sharePublic)
+    if (!rl.ok) return tooManyRequests(rl)
 
     const link = await db.shareLink.findUnique({
       where: { token },

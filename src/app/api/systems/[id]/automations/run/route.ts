@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+import { requireOwnedSystem } from '@/lib/auth'
+import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -86,6 +88,11 @@ function buildRunLog(opts: {
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handleRoute(async () => {
     const { id } = await ctx.params
+    const guard = await requireOwnedSystem(req, id)
+    if (!guard.ok) return guard.res
+    const rl = rateLimit(`run:${guard.account.id}`, LIMITS.automationRun)
+    if (!rl.ok) return tooManyRequests(rl)
+
     const body: unknown = await req.json().catch(() => null)
     const parsed = runSchema.safeParse(body)
     if (!parsed.success) {
@@ -152,15 +159,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   })
 }
 
-/** GET /api/systems/[id]/automations/run — recent run history (last 20). */
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+/** GET /api/systems/[id]/automations/run — recent run history (last 20, owner-only). */
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handleRoute(async () => {
     const { id } = await ctx.params
-    const system = await db.aiSystem.findUnique({
-      where: { id },
-      select: { id: true },
-    })
-    if (!system) return jsonError(404, 'System not found.')
+    const guard = await requireOwnedSystem(req, id)
+    if (!guard.ok) return guard.res
 
     const runs = await db.automationRun.findMany({
       where: { systemId: id },

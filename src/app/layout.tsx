@@ -27,35 +27,101 @@ const arabic = IBM_Plex_Sans_Arabic({
   display: "swap",
 });
 
+/** Canonical site origin — set NEXT_PUBLIC_SITE_URL in production. */
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "http://localhost:3000";
+
 export const metadata: Metadata = {
-  title: "Wakeel — The AI Employee You Actually Hire | وكيل",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Wakeel — The AI Employee You Actually Hire | وكيل",
+    template: "%s | Wakeel — وكيل",
+  },
   description:
     "Wakeel discovers the systems your company already runs, then forges new ones on demand. A dark mission-control for the AI employee you actually hire.",
   keywords: [
     "Wakeel",
     "وكيل",
     "AI employee",
+    "AI agent platform",
     "system discovery",
-    "operations",
+    "workflow automation",
+    "operations console",
     "mission control",
+    "موظف ذكي",
+    "أتمتة",
   ],
   authors: [{ name: "Wakeel Systems" }],
+  creator: "Wakeel Systems",
+  applicationName: "Wakeel",
   icons: {
     icon: "/wakeel.svg",
+    apple: "/wakeel.svg",
+  },
+  alternates: {
+    canonical: "/",
   },
   openGraph: {
-    title: "Wakeel — The AI Employee You Actually Hire",
+    title: "Wakeel — The AI Employee You Actually Hire | وكيل",
     description:
-      "Point Wakeel at your company. It maps your existing systems and forges the ones you are missing.",
+      "Point Wakeel at your company. It maps your existing systems and forges the ones you are missing — a dark mission-control for your AI employee.",
     siteName: "Wakeel",
     type: "website",
+    url: SITE_URL,
+    locale: "en_US",
+    alternateLocale: ["ar_EG"],
+    images: [
+      {
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "Wakeel — AI employee mission control",
+      },
+    ],
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "Wakeel — The AI Employee You Actually Hire | وكيل",
+    description:
+      "Wakeel discovers the systems your company already runs, then forges the ones you are missing.",
+    images: ["/og.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  category: "technology",
 };
 
 export const viewport: Viewport = {
   themeColor: "#0A0908",
   width: "device-width",
   initialScale: 1,
+};
+
+/** Structured data: helps search engines understand the product. */
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  name: "Wakeel",
+  alternateName: "وكيل",
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web",
+  url: SITE_URL,
+  description:
+    "Wakeel discovers the systems your company already runs, then forges new ones on demand — an AI employee with a dark mission-control console.",
+  inLanguage: ["en", "ar"],
+  offers: {
+    "@type": "Offer",
+    price: "0",
+    priceCurrency: "USD",
+    availability: "https://schema.org/PreOrder",
+  },
 };
 
 export default function RootLayout({
@@ -68,6 +134,10 @@ export default function RootLayout({
       <body
         className={`${display.variable} ${monoData.variable} ${arabic.variable} antialiased bg-background text-foreground`}
       >
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
         {children}
         <Toaster
           theme="dark"

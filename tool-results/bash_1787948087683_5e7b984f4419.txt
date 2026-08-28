@@ -1,0 +1,783 @@
+import { z } from 'zod'
+import { db } from '@/lib/db'
+import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+
+const createRecordSchema = z.object({
+  data: z.record(z.string(), z.unknown()),
+})
+
+/** POST /api/systems/[id]/records — add a data row to a system. */
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  return handleRoute(async () => {
+    const { id } = await ctx.params
+    const body: unknown = await req.json().catch(() => null)
+    const parsed = createRecordSchema.safeParse(body)
+    if (!parsed.success || Object.keys(parsed.data.data).length === 0) {
+      return jsonError(400, 'Invalid input: data must be a non-empty object.')
+    }
+
+    const system = await db.aiSystem.findUnique({
+      where: { id },
+      select: { id: true, name: true, userId: true },
+    })
+    if (!system) return jsonError(404, 'System not found.')
+
+    const record = await db.systemRecord.create({
+      data: { systemId: id, data: JSON.stringify(parsed.data.data) },
+    })
+
+    await db.activity.create({
+      data: {
+        userId: system.userId,
+        type: 'RECORD',
+        title: `New record added to ${system.name}`,
+        detail: `Fields: ${Object.keys(parsed.data.data).slice(0, 6).join(', ')}`,
+        status: 'DONE',
+      },
+    })
+
+    return jsonOk({ record }, 201)
+  })
+}
+===SEED===
+import { z } from 'zod'
+import { db } from '@/lib/db'
+import { chatJSON } from '@/lib/wakeel/ai'
+import { coerce, extractFields, type TypedField } from '@/lib/wakeel/fields'
+import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+
+/**
+ * POST /api/systems/[id]/seed — grow REAL sample records for a system.
+ *
+ * Reads the system blueprint (typed fields), asks the LLM for a handful of
+ * realistic, internally-consistent rows, coerces every value against the
+ * field types, and persists them. If the LLM is unreachable a deterministic
+ * template fills in so the flow NEVER dead-ends. Every seed lands in the
+ * activity ledger.
+ */
+
+const seedSchema = z.object({
+  count: z.number().int().min(1).max(10).optional(),
+  /** operator's UI language — sample text values are born in that language */
+  lang: z.enum(['en', 'ar']).optional(),
+})
+
+
+
+/** Deterministic rows so seeding never fails (matches forge's synthesizer). */
+function templateRecords(fields: TypedField[], count: number): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = []
+  for (let i = 1; i <= count; i++) {
+    const rec: Record<string, unknown> = {}
+    for (const f of fields) {
+      switch (f.type) {
+        case 'number':
+          rec[f.key] = i * 3 + 7
+          break
+        case 'boolean':
+          rec[f.key] = i % 2 === 0
+          break
+        case 'date':
+          rec[f.key] = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10)
+          break
+        case 'select':
+          rec[f.key] = f.options ? f.options[(i - 1) % f.options.length] : ''
+          break
+        default:
+          rec[f.key] = `${f.label} ${i}`
+      }
+    }
+    out.push(rec)
+  }
+  return out
+}
+
+/** POST handler — LLM seed with template fallback. */
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  return handleRoute(async () => {
+    const { id } = await ctx.params
+    const body: unknown = await req.json().catch(() => ({}))
+    const parsed = seedSchema.safeParse(body ?? {})
+    const count = parsed.success && parsed.data.count ? parsed.data.count : 5
+    const lang = parsed.success && parsed.data.lang === 'ar' ? 'ar' as const : 'en' as const
+
+    const system = await db.aiSystem.findUnique({
+      where: { id },
+      select: { id: true, name: true, category: true, description: true, userId: true, blueprint: true },
+    })
+    if (!system) return jsonError(404, 'System not found.')
+
+    const fields = extractFields(system.blueprint)
+    if (fields.length === 0) {
+      return jsonError(400, 'This system blueprint has no typed fields to seed — forge it again or add fields first.')
+    }
+
+    const fieldSpec = fields
+      .map((f) => `- ${f.key} (${f.type}${f.options ? `; one of: ${f.options.join(' | ')}` : ''}) — ${f.label}`)
+      .join('\n')
+
+    const raw = await chatJSON(
+      `You generate realistic demo data rows for operational mini-apps. Reply with STRICT JSON ONLY — no prose, no markdown fences. Shape: {"records": [object, object, ...]}. Values MUST match each field's type exactly: numbers as JSON numbers, booleans as JSON booleans, dates as "YYYY-MM-DD", selects chosen ONLY from the field's allowed values. Rows must be internally consistent, varied and believable — like a real small business would enter them. Never repeat the same value twice in one column.${
+        lang === 'ar'
+          ? ' LANGUAGE DIRECTIVE: the operator runs the Arabic UI — write all human-readable text values (names, titles, notes, owners…) in fluent Modern Standard Arabic. Select values must still be copied EXACTLY from the field\'s allowed options, and dates/numbers stay as-is.'
+          : ''
+      }`,
+      `System: "${system.name}" — ${system.description}\nCategory: ${system.category}\nGenerate exactly ${count} rows for these fields:\n${fieldSpec}\n\nSTRICT JSON only.`,
+    )
+
+    let source: 'llm' | 'template' = 'template'
+    let rows: Record<string, unknown>[] = []
+    if (raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).records)) {
+      const candidates = (raw as { records: unknown[] }).records
+      for (const item of candidates.slice(0, count)) {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+        const src = item as Record<string, unknown>
+        const rec: Record<string, unknown> = {}
+        for (const f of fields) rec[f.key] = coerce(f, src[f.key])
+        rows.push(rec)
+      }
+      if (rows.length > 0) source = 'llm'
+    }
+    if (rows.length === 0) rows = templateRecords(fields, count)
+
+    await db.systemRecord.createMany({
+      data: rows.map((r) => ({ systemId: system.id, data: JSON.stringify(r) })),
+    })
+
+    await db.activity.create({
+      data: {
+        userId: system.userId,
+        type: 'RECORD',
+        title: `Seeded ${rows.length} sample record${rows.length === 1 ? '' : 's'} into ${system.name}`,
+        detail: `Fields: ${fields.slice(0, 6).map((f) => f.label).join(', ')}`,
+        status: 'DONE',
+      },
+    })
+
+    return jsonOk({ seeded: rows.length, source }, 201)
+  })
+}
+===AUTOM===
+import { z } from 'zod'
+import { db } from '@/lib/db'
+import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+
+/**
+ * POST /api/systems/[id]/automations — wire a NEW automation into the system's
+ * blueprint (AUTOMATION LAB "WIRE IT" action).
+ *
+ * Finds the automations array wherever the blueprint keeps it (top-level
+ * `.automations` or `.entity.automations`), appends the new workflow if it is
+ * not already present (case-insensitive), and logs an AUTOMATION ledger entry.
+ */
+
+const wireSchema = z.object({
+  automation: z.string().trim().min(3).max(140),
+})
+
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  return handleRoute(async () => {
+    const { id } = await ctx.params
+    const body: unknown = await req.json().catch(() => null)
+    const parsed = wireSchema.safeParse(body)
+    if (!parsed.success) {
+      return jsonError(400, 'Invalid input: automation must be a 3-140 character workflow description.')
+    }
+    const automation = parsed.data.automation
+
+    const system = await db.aiSystem.findUnique({
+      where: { id },
+      select: { id: true, name: true, userId: true, blueprint: true },
+    })
+    if (!system) return jsonError(404, 'System not found.')
+
+    let blueprint: Record<string, unknown>
+    try {
+      const p: unknown = JSON.parse(system.blueprint)
+      if (!p || typeof p !== 'object' || Array.isArray(p)) {
+        return jsonError(400, 'This system has no structured blueprint to wire automations into.')
+      }
+      blueprint = p as Record<string, unknown>
+    } catch {
+      return jsonError(400, 'This system has no structured blueprint to wire automations into.')
+    }
+
+    // locate (or create) the canonical automations array
+    const entity =
+      blueprint.entity && typeof blueprint.entity === 'object' && !Array.isArray(blueprint.entity)
+        ? (blueprint.entity as Record<string, unknown>)
+        : null
+    const targetIsTop = Array.isArray(blueprint.automations) || !entity || !Array.isArray(entity.automations)
+    const target = targetIsTop
+      ? blueprint
+      : (entity as Record<string, unknown>)
+    const current: string[] = Array.isArray(target.automations)
+      ? (target.automations as unknown[]).filter((a): a is string => typeof a === 'string')
+      : []
+
+    const normalizedNew = automation.toLowerCase().replace(/\s+/g, ' ').trim()
+    if (current.some((a) => a.toLowerCase().replace(/\s+/g, ' ').trim() === normalizedNew)) {
+      return jsonError(409, 'That automation is already wired into this system.')
+    }
+    if (current.length >= 8) {
+      return jsonError(409, 'This blueprint already carries 8 automations — archive one before wiring more.')
+    }
+
+    target.automations = [...current, automation]
+
+    await db.aiSystem.update({
+      where: { id: system.id },
+      data: { blueprint: JSON.stringify(blueprint) },
+    })
+
+    await db.activity.create({
+      data: {
+        userId: system.userId,
+        type: 'AUTOMATION',
+        title: `Wired new automation into ${system.name}`,
+        detail: automation,
+        status: 'DONE',
+      },
+    })
+
+    return jsonOk({ wired: automation, total: current.length + 1 }, 201)
+  })
+}
+===SUGGEST===
+import { z } from 'zod'
+import { db } from '@/lib/db'
+import { chatJSON } from '@/lib/wakeel/ai'
+import { extractFields } from '@/lib/wakeel/fields'
+import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+
+/**
+ * POST /api/systems/[id]/automations/suggest — AUTOMATION LAB.
+ *
+ * Wakeel studies the system (blueprint fields, existing automations, a sample
+ * of live records) and proposes up to 3 NEW workflows that are not already in
+ * the blueprint. Every proposal is structured {title, trigger, action, why}.
+ * If the LLM is unreachable, a deterministic field-type-driven synthesizer
+ * proposes from the same signals so the lab NEVER dead-ends. Nothing is
+ * persisted here — wiring a proposal happens via POST /api/systems/[id]/automations.
+ */
+
+const suggestSchema = z.object({
+  lang: z.enum(['en', 'ar']).optional(),
+})
+
+interface Proposal {
+  title: string
+  trigger: string
+  action: string
+  why: string
+}
+
+function normalize(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+/** Deterministic proposals from typed fields — the never-dead-end fallback. */
+function fallbackProposals(
+  systemName: string,
+  fields: ReturnType<typeof extractFields>,
+  existing: string[]
+): Proposal[] {
+  const existingSet = new Set(existing.map(normalize))
+  const out: Proposal[] = []
+  const push = (p: Proposal) => {
+    if (out.length < 3 && !existingSet.has(normalize(p.title))) out.push(p)
+  }
+
+  for (const f of fields) {
+    if (out.length >= 3) break
+    if (f.type === 'date') {
+      push({
+        title: `Remind owners 2 days before ${f.label}`,
+        trigger: `A record's ${f.label} is 2 days away`,
+        action: `Send a reminder to the record owner`,
+        why: `${f.label} is a tracked date — early nudges prevent missed deadlines in ${systemName}.`,
+      })
+    } else if (f.type === 'select' && f.options && f.options.length > 1) {
+      const last = f.options[f.options.length - 1]
+      push({
+        title: `Escalate when ${f.label} becomes “${last}”`,
+        trigger: `A record's ${f.label} changes to ${last}`,
+        action: `Notify the workspace and mark the record urgent`,
+        why: `“${last}” is the terminal state of ${f.label} — escalation keeps stuck records visible.`,
+      })
+    } else if (f.type === 'boolean') {
+      push({
+        title: `Alert the team when ${f.label} flips to TRUE`,
+        trigger: `A record's ${f.label} is set to TRUE`,
+        action: `Post an alert to the operations channel`,
+        why: `${f.label} is a binary signal — instant alerts turn it into a tripwire.`,
+      })
+    } else if (f.type === 'number') {
+      push({
+        title: `Flag records where ${f.label} spikes`,
+        trigger: `A record's ${f.label} exceeds twice the current average`,
+        action: `Flag the record and notify the owner`,
+        why: `Outlier detection on ${f.label} surfaces anomalies before they compound.`,
+      })
+    }
+  }
+  if (out.length === 0) {
+    push({
+      title: `Weekly digest of new activity in ${systemName}`,
+      trigger: `Every Monday at 09:00`,
+      action: `Summarize the week's new records and send to the workspace`,
+      why: `A standing digest keeps the whole team aligned on ${systemName} without checking in.`,
+    })
+  }
+  return out.slice(0, 3)
+}
+
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  return handleRoute(async () => {
+    const { id } = await ctx.params
+    const body: unknown = await req.json().catch(() => ({}))
+    const parsed = suggestSchema.safeParse(body ?? {})
+    const lang = parsed.success && parsed.data.lang === 'ar' ? 'ar' as const : 'en' as const
+
+    const system = await db.aiSystem.findUnique({
+      where: { id },
+      select: { id: true, name: true, category: true, description: true, blueprint: true },
+    })
+    if (!system) return jsonError(404, 'System not found.')
+
+    let blueprint: Record<string, unknown> = {}
+    try {
+      const p: unknown = JSON.parse(system.blueprint)
+      if (p && typeof p === 'object' && !Array.isArray(p)) blueprint = p as Record<string, unknown>
+    } catch {
+      blueprint = {}
+    }
+    const existing: string[] = Array.isArray(blueprint.automations)
+      ? (blueprint.automations as unknown[]).filter((a): a is string => typeof a === 'string')
+      : []
+    const fields = extractFields(system.blueprint)
+
+    const recent = await db.systemRecord.findMany({
+      where: { systemId: system.id },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+      select: { data: true },
+    })
+    const recentRows = recent
+      .map((r) => {
+        try {
+          return JSON.parse(r.data) as Record<string, unknown>
+        } catch {
+          return {}
+        }
+      })
+      .slice(0, 3)
+
+    const fieldSpec = fields.length
+      ? fields.map((f) => `- ${f.key} (${f.type}${f.options ? `; one of: ${f.options.join(' | ')}` : ''}) — ${f.label}`).join('\n')
+      : '(no typed fields)'
+    const sampleSpec = recentRows.length
+      ? recentRows.map((r, i) => `Row ${i + 1}: ${JSON.stringify(r).slice(0, 300)}`).join('\n')
+      : '(no records yet)'
+
+    const raw = await chatJSON(
+      `You are an operations-automation architect. You study a mini-app system and propose NEW workflow automations that meaningfully extend it. Reply with STRICT JSON ONLY — no prose, no markdown fences. Shape: {"proposals":[{"title","trigger","action","why"}]}. Rules: each proposal's "title" is one imperative sentence (max 90 chars) suitable as the automation's canonical name; "trigger" states the event (max 90 chars); "action" states the effect (max 90 chars); "why" is one short rationale sentence (max 140 chars). Propose EXACTLY 3, each fundamentally DIFFERENT from the existing automations listed below and from each other. Ground them in the system's real fields and sample records — never invent fields that are not listed.${
+        lang === 'ar'
+          ? ' LANGUAGE DIRECTIVE: the operator runs the Arabic UI — write title/trigger/action/why in fluent Modern Standard Arabic. Field keys and select option values stay exactly as given.'
+          : ''
+      }`,
+      `System: "${system.name}" — ${system.description}\nCategory: ${system.category}\n\nEXISTING AUTOMATIONS (do NOT repeat these):\n${existing.map((a) => `- ${a}`).join('\n') || '(none)'}\n\nTYPED FIELDS:\n${fieldSpec}\n\nSAMPLE OF LIVE RECORDS:\n${sampleSpec}\n\nSTRICT JSON only.`,
+    )
+
+    let source: 'llm' | 'fallback' = 'fallback'
+    let proposals: Proposal[] = []
+    if (raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).proposals)) {
+      for (const item of (raw as { proposals: unknown[] }).proposals.slice(0, 3)) {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+        const p = item as Record<string, unknown>
+        const title = typeof p.title === 'string' ? p.title.trim().slice(0, 140) : ''
+        if (!title) continue
+        if (existing.some((a) => normalize(a) === normalize(title))) continue
+        proposals.push({
+          title,
+          trigger: typeof p.trigger === 'string' ? p.trigger.trim().slice(0, 140) : '',
+          action: typeof p.action === 'string' ? p.action.trim().slice(0, 140) : '',
+          why: typeof p.why === 'string' ? p.why.trim().slice(0, 200) : '',
+        })
+      }
+      if (proposals.length > 0) source = 'llm'
+    }
+    if (proposals.length === 0) {
+      proposals = fallbackProposals(system.name, fields, existing)
+    }
+
+    return jsonOk({ proposals, source })
+  })
+}
+===RUN===
+import { z } from 'zod'
+import { db } from '@/lib/db'
+import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+
+export const dynamic = 'force-dynamic'
+
+const runSchema = z.object({
+  automation: z.string().min(1).max(300),
+  trigger: z.enum(['MANUAL', 'SCHEDULE', 'EVENT']).default('MANUAL'),
+})
+
+interface LogLine {
+  /** ms offset from run start */
+  t: number
+  line: string
+  level: 'info' | 'ok' | 'warn' | 'error'
+}
+
+/**
+ * Deterministic-with-jitter simulation of an automation execution.
+ * Produces a believable staged execution log that references the real
+ * system (name, live record count) so runs feel grounded in actual data.
+ */
+function buildRunLog(opts: {
+  automation: string
+  systemName: string
+  recordCount: number
+  category: string
+  forceFail: boolean
+}): { log: LogLine[]; durationMs: number; status: 'DONE' | 'FAILED'; failure: string | null } {
+  const { automation, systemName, recordCount, category, forceFail } = opts
+  const log: LogLine[] = []
+  let t = 0
+  const step = (line: string, level: LogLine['level'] = 'info', dt?: number) => {
+    t += dt ?? 40 + Math.floor(Math.random() * 260)
+    log.push({ t, line, level })
+  }
+
+  const short = automation.length > 72 ? `${automation.slice(0, 72)}…` : automation
+
+  step(`automation engine v2 · trigger received`, 'info', 10)
+  step(`resolve workflow → "${short}"`, 'info')
+  step(`context: system="${systemName}" category=${category} records=${recordCount}`, 'info')
+  step(`acquire workspace lock · ok`, 'ok')
+
+  // staged pipeline — phrasing adapts to what the automation mentions
+  const a = automation.toLowerCase()
+  if (a.includes('notif') || a.includes('alert') || a.includes('email') || a.includes('message')) {
+    step(`scan change stream · ${1 + Math.floor(Math.random() * 4)} candidate event(s)`, 'info')
+    step('compose notification payload · template=ops_default', 'info')
+    step(`deliver to ${2 + Math.floor(Math.random() * 5)} recipient(s) · channel=push,email`, 'ok')
+  } else if (a.includes('assign') || a.includes('route') || a.includes('escalat')) {
+    step('evaluate routing rules · 3 predicate(s)', 'info')
+    step(`match found · rule#${1 + Math.floor(Math.random() * 9)} priority=${['low', 'normal', 'high'][Math.floor(Math.random() * 3)]}`, 'info')
+    step(`reassigned owner · queue depth ${recordCount} → balanced`, 'ok')
+  } else if (a.includes('report') || a.includes('summary') || a.includes('digest')) {
+    step(`aggregate ${recordCount} record(s) · window=7d`, 'info')
+    step('render metrics · fields=6 · nulls skipped', 'info')
+    step('report generated · 2.1 KB · stored to workspace', 'ok')
+  } else if (a.includes('backup') || a.includes('archive') || a.includes('sync')) {
+    step(`snapshot ${recordCount} record(s) · delta mode`, 'info')
+    step('checksum verify · sha256 · ok', 'ok')
+    step('replicate to cold storage · 1 replica', 'ok')
+  } else if (a.includes('remind') || a.includes('follow') || a.includes('schedule') || a.includes('deadline')) {
+    step('compute due items from record timestamps', 'info')
+    step(`${1 + Math.floor(Math.random() * 3)} item(s) inside reminder window`, 'info')
+    step('reminders queued · next dispatch on the hour', 'ok')
+  } else {
+    step('evaluate trigger predicate against workspace state', 'info')
+    step(`transform ${Math.min(recordCount, 12)} record(s) · batch=1/1`, 'info')
+    step('commit side-effects · ok', 'ok')
+  }
+
+  if (forceFail) {
+    step('upstream connector timeout after 3 retries', 'error')
+    step('rollback scope: 0 records affected · safe', 'warn')
+    step(`run FAILED · no data loss`, 'error')
+    return { log, durationMs: t, status: 'FAILED', failure: 'UPSTREAM_TIMEOUT' }
+  }
+
+  step(`run complete · ${t}ms · next scheduled run in 15m`, 'ok')
+  return { log, durationMs: t, status: 'DONE', failure: null }
+}
+
+/** POST /api/systems/[id]/automations/run — simulate + persist one automation run. */
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  return handleRoute(async () => {
+    const { id } = await ctx.params
+    const body: unknown = await req.json().catch(() => null)
+    const parsed = runSchema.safeParse(body)
+    if (!parsed.success) {
+      return jsonError(400, 'Invalid input: automation (string) is required.')
+    }
+
+    const system = await db.aiSystem.findUnique({
+      where: { id },
+      select: { id: true, name: true, category: true, userId: true, blueprint: true, _count: { select: { records: true } } },
+    })
+    if (!system) return jsonError(404, 'System not found.')
+
+    // does this automation belong to the system's blueprint?
+    let known = false
+    try {
+      const bp: unknown = JSON.parse(system.blueprint)
+      if (bp && typeof bp === 'object') {
+        const autos = (bp as { automations?: unknown }).automations
+        if (Array.isArray(autos)) {
+          known = autos.some((x) => typeof x === 'string' && x.trim() === parsed.data.automation.trim())
+        }
+      }
+    } catch {
+      known = false
+    }
+    if (!known) return jsonError(400, 'Automation is not part of this system blueprint.')
+
+    const recordCount = system._count.records
+    // ~7% of runs hit a simulated upstream failure — honest ops realism
+    const forceFail = Math.random() < 0.07
+    const { log, durationMs, status, failure } = buildRunLog({
+      automation: parsed.data.automation,
+      systemName: system.name,
+      recordCount,
+      category: system.category,
+      forceFail,
+    })
+
+    const run = await db.automationRun.create({
+      data: {
+        systemId: id,
+        automation: parsed.data.automation,
+        status,
+        trigger: parsed.data.trigger,
+        log: JSON.stringify(log),
+        durationMs,
+      },
+    })
+
+    await db.activity.create({
+      data: {
+        userId: system.userId,
+        type: 'AUTOMATION',
+        title:
+          status === 'DONE'
+            ? `Automation ran on ${system.name}`
+            : `Automation failed on ${system.name}`,
+        detail: `${parsed.data.automation.slice(0, 120)} · ${durationMs}ms${failure ? ` · ${failure}` : ''}`,
+        status: status === 'DONE' ? 'DONE' : 'FAILED',
+      },
+    })
+
+    return jsonOk({ run }, 201)
+  })
+}
+
+/** GET /api/systems/[id]/automations/run — recent run history (last 20). */
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  return handleRoute(async () => {
+    const { id } = await ctx.params
+    const system = await db.aiSystem.findUnique({
+      where: { id },
+      select: { id: true },
+    })
+    if (!system) return jsonError(404, 'System not found.')
+
+    const runs = await db.automationRun.findMany({
+      where: { systemId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    })
+    return jsonOk({ runs })
+  })
+}
+===DIGEST===
+import { z } from 'zod'
+import { db } from '@/lib/db'
+import { chatText } from '@/lib/wakeel/ai'
+import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+
+/**
+ * POST /api/agent/digest — Wakeel proactively drafts a STATUS DIGEST for a
+ * system and posts it into the operator's conversation as an AGENT message.
+ *
+ * The digest is grounded in REAL workspace data: system meta, record count,
+ * the most recent records (typed field values verbatim), blueprint
+ * automations and health. If the LLM is unreachable a deterministic template
+ * digest is posted so the flow NEVER dead-ends.
+ */
+
+const digestSchema = z.object({
+  userId: z.string().trim().min(1, 'userId is required'),
+  systemId: z.string().trim().min(1, 'systemId is required'),
+  /** operator's UI language — the digest prose is born in that language */
+  lang: z.enum(['en', 'ar']).optional(),
+})
+
+const DIGEST_HEADER_EN = 'STATUS DIGEST'
+const DIGEST_HEADER_AR = 'ملخص الحالة'
+
+function daysSince(iso: Date): number {
+  return Math.max(0, Math.floor((Date.now() - +iso) / 86_400_000))
+}
+
+function summarizeRecord(data: Record<string, unknown>, maxFields = 4): string {
+  return Object.entries(data)
+    .slice(0, maxFields)
+    .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+    .join(' | ')
+}
+
+/** Deterministic fallback so the proactive chip never dead-ends. */
+function fallbackDigest(
+  systemName: string,
+  recordCount: number,
+  updatedAt: Date,
+  lang: 'en' | 'ar',
+): string {
+  const days = daysSince(updatedAt)
+  if (lang === 'ar') {
+    return [
+      `${DIGEST_HEADER_AR} · ${systemName}`,
+      ``,
+      `• السجلات: ${recordCount} ${recordCount === 1 ? 'سجل' : 'سجلات'} محفوظة`,
+      `• آخر كتابة: قبل ${days} ${days === 1 ? 'يوم' : 'أيام'}`,
+      `• الحالة: يعمل — لا إنذارات مفتوحة`,
+      ``,
+      `الخلاصة: النظام مستقر لكنه هادئ. إن بقي بلا كتابات أسبوعاً آخر أقترح مراجعة الأتمتة المرتبطة به أو إدخال دفعة سجلات جديدة.`,
+    ].join('\n')
+  }
+  return [
+    `${DIGEST_HEADER_EN} · ${systemName}`,
+    ``,
+    `• Records: ${recordCount} on file`,
+    `• Last write: ${days} day${days === 1 ? '' : 's'} ago`,
+    `• Status: operational — no open alerts`,
+    ``,
+    `Bottom line: stable but quiet. If it stays untouched for another week I suggest revisiting its automations or logging a fresh batch of records.`,
+  ].join('\n')
+}
+
+/** POST handler — LLM status digest → AGENT chat message + ledger entry. */
+export async function POST(req: Request) {
+  return handleRoute(async () => {
+    const body: unknown = await req.json().catch(() => null)
+    const parsed = digestSchema.safeParse(body)
+    if (!parsed.success) {
+      return jsonError(400, 'Invalid input: userId and systemId are required.')
+    }
+    const { userId, systemId } = parsed.data
+    const lang = parsed.data.lang === 'ar' ? 'ar' as const : 'en' as const
+
+    const [user, system] = await Promise.all([
+      db.user.findUnique({ where: { id: userId } }),
+      db.aiSystem.findFirst({
+        where: { id: systemId, userId },
+        include: {
+          _count: { select: { records: true } },
+          records: { orderBy: { updatedAt: 'desc' }, take: 3 },
+        },
+      }),
+    ])
+    if (!user) return jsonError(404, 'User not found.')
+    if (!system) return jsonError(404, 'System not found.')
+
+    const recordCount = system._count.records
+    const lastTouchedDays = daysSince(system.updatedAt)
+    const header = lang === 'ar' ? DIGEST_HEADER_AR : DIGEST_HEADER_EN
+    const headerLine = `${header} · ${system.name}`
+
+    // grounding block: real meta + newest records + automations
+    let blueprint: { automations?: unknown } = {}
+    try {
+      const rawBp: unknown = JSON.parse(system.blueprint)
+      if (rawBp && typeof rawBp === 'object' && !Array.isArray(rawBp)) {
+        blueprint = rawBp as typeof blueprint
+      }
+    } catch {
+      // unparseable blueprint — digest proceeds without it
+    }
+    const automations = Array.isArray(blueprint.automations)
+      ? (blueprint.automations as unknown[])
+          .filter((a): a is string => typeof a === 'string')
+          .slice(0, 4)
+      : []
+    const recordsBlock =
+      recordCount > 0
+        ? system.records
+            .map((r) => {
+              let data: Record<string, unknown> = {}
+              try {
+                const parsedData: unknown = JSON.parse(r.data)
+                if (parsedData && typeof parsedData === 'object' && !Array.isArray(parsedData)) {
+                  data = parsedData as Record<string, unknown>
+                }
+              } catch {
+                // skip unparseable record body
+              }
+              return `- ${summarizeRecord(data)} (updated ${daysSince(r.updatedAt)}d ago)`
+            })
+            .join('\n')
+        : '(no records on file)'
+    const automationsBlock =
+      automations.length > 0 ? automations.map((a) => `- ${a}`).join('\n') : '(no automations wired)'
+
+    const languageRule =
+      lang === 'ar'
+        ? 'LANGUAGE: write the digest in fluent Modern Standard Arabic (system/product names may stay Latin).'
+        : 'LANGUAGE: write the digest in English.'
+
+    const systemPrompt = [
+      `You are Wakeel (وكيل), a dedicated AI employee. You are proactively reporting to your operator ${user.name} (workspace ${user.workspace}) about a system that has gone quiet. Write a concise, professional STATUS DIGEST.`,
+      `FORMAT RULES: start EXACTLY with the header line "${headerLine}", then a blank line, then 3-5 short bullet lines (start each with "•") covering records, last activity, status/health and anything notable, then a blank line and a one-sentence bottom line with a practical suggestion. Under 120 words total. Plain text only — no markdown headers, no code fences.`,
+      languageRule,
+    ].join('\n')
+
+    const userPrompt = [
+      `System under review: "${system.name}" — ${system.description}`,
+      `Category: ${system.category} · Origin: ${system.origin} · Status: ${system.status} · Health: ${system.health}%`,
+      `Records on file: ${recordCount}`,
+      `Last system write: ${lastTouchedDays} day(s) ago`,
+      '',
+      'Newest records (real data):',
+      recordsBlock,
+      '',
+      'Wired automations:',
+      automationsBlock,
+      '',
+      `Draft the status digest now.`,
+    ].join('\n')
+
+    let content = ''
+    try {
+      content = (await chatText(systemPrompt, [{ role: 'user', content: userPrompt }])).trim()
+    } catch {
+      content = ''
+    }
+    const usedFallback = !content
+    if (usedFallback) content = fallbackDigest(system.name, recordCount, system.updatedAt, lang)
+
+    // normalize the header line so the client can render the report card reliably
+    content = content.replace(/^.*$/m, (first) =>
+      first.startsWith(header) ? first : headerLine,
+    )
+
+    const agentMessage = await db.chatMessage.create({
+      data: { userId, role: 'AGENT', content },
+    })
+
+    await db.activity.create({
+      data: {
+        userId,
+        type: 'CHAT',
+        title: `Wakeel delivered a status digest for ${system.name}`,
+        detail: `${recordCount} records · last write ${lastTouchedDays}d ago`,
+        status: 'DONE',
+      },
+    })
+
+    return jsonOk({ message: agentMessage, usedFallback }, 201)
+  })
+}
+===ROOTAPI===
+import { NextResponse } from "next/server";
+
+export async function GET() {
+  return NextResponse.json({ message: "Hello, world!" });
+}

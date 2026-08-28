@@ -20,6 +20,40 @@ let zaiInstance: ZAI | null = null
  */
 const WAKEEL_MODEL = process.env.WAKEEL_MODEL?.trim() || undefined
 
+/* --------------------------- timeout discipline --------------------------- */
+
+/** Every outbound AI call is hard-capped so a stalled upstream can never
+ * hang an API route (and the client) indefinitely. Tuned per call shape:
+ * searches are quick, JSON generations need two attempts, streams only need
+ * to ESTABLISH in time — ongoing deltas are the caller's concern. */
+export const AI_TIMEOUTS = {
+  search: 20_000,
+  json: 60_000,
+  text: 60_000,
+  streamEstablish: 45_000,
+} as const
+
+class AiTimeoutError extends Error {}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new AiTimeoutError(`[wakeel/ai] ${label} timed out after ${ms}ms`)),
+      ms,
+    )
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      },
+    )
+  })
+}
+
 export async function getZAI(): Promise<ZAI> {
   if (!zaiInstance) {
     zaiInstance = await ZAI.create()
@@ -48,11 +82,15 @@ function extractContent(response: unknown): string {
   return typeof content === 'string' ? content : ''
 }
 
-/** Run one web search. Never throws — returns [] on any failure. */
+/** Run one web search. Never throws — returns [] on any failure (timeout included). */
 export async function runWebSearch(query: string, num = 6): Promise<WebSearchResult[]> {
   try {
     const zai = await getZAI()
-    const results = await zai.functions.invoke('web_search', { query, num })
+    const results = await withTimeout(
+      zai.functions.invoke('web_search', { query, num }),
+      AI_TIMEOUTS.search,
+      'web_search',
+    )
     if (!Array.isArray(results)) return []
     return results.slice(0, num).map((item) => ({
       name: typeof item?.name === 'string' ? item.name : '',
@@ -93,14 +131,18 @@ export async function chatJSON(systemPrompt: string, userPrompt: string): Promis
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const zai = await getZAI()
-      const response: unknown = await zai.chat.completions.create({
-        ...(WAKEEL_MODEL ? { model: WAKEEL_MODEL } : {}),
-        messages: [
-          { role: 'assistant', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        thinking: { type: 'disabled' },
-      })
+      const response: unknown = await withTimeout(
+        zai.chat.completions.create({
+          ...(WAKEEL_MODEL ? { model: WAKEEL_MODEL } : {}),
+          messages: [
+            { role: 'assistant', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          thinking: { type: 'disabled' },
+        }),
+        AI_TIMEOUTS.json,
+        `chatJSON attempt ${attempt}`,
+      )
       const content = extractContent(response)
       if (!content) {
         console.warn(`[wakeel/ai] chatJSON attempt ${attempt}: empty completion`)
@@ -128,14 +170,18 @@ export interface ChatTurn {
 export async function chatText(systemPrompt: string, messages: ChatTurn[]): Promise<string> {
   try {
     const zai = await getZAI()
-    const response: unknown = await zai.chat.completions.create({
-      ...(WAKEEL_MODEL ? { model: WAKEEL_MODEL } : {}),
-      messages: [
-        { role: 'assistant', content: systemPrompt },
-        ...messages,
-      ],
-      thinking: { type: 'disabled' },
-    })
+    const response: unknown = await withTimeout(
+      zai.chat.completions.create({
+        ...(WAKEEL_MODEL ? { model: WAKEEL_MODEL } : {}),
+        messages: [
+          { role: 'assistant', content: systemPrompt },
+          ...messages,
+        ],
+        thinking: { type: 'disabled' },
+      }),
+      AI_TIMEOUTS.text,
+      'chatText',
+    )
     return extractContent(response)
   } catch (error) {
     console.error('[wakeel/ai] chatText failed:', error)
@@ -156,15 +202,19 @@ export async function chatTextStream(
 ): Promise<ReadableStream<Uint8Array> | null> {
   try {
     const zai = await getZAI()
-    const response: unknown = await zai.chat.completions.create({
-      ...(WAKEEL_MODEL ? { model: WAKEEL_MODEL } : {}),
-      messages: [
-        { role: 'assistant', content: systemPrompt },
-        ...messages,
-      ],
-      stream: true,
-      thinking: { type: 'disabled' },
-    })
+    const response: unknown = await withTimeout(
+      zai.chat.completions.create({
+        ...(WAKEEL_MODEL ? { model: WAKEEL_MODEL } : {}),
+        messages: [
+          { role: 'assistant', content: systemPrompt },
+          ...messages,
+        ],
+        stream: true,
+        thinking: { type: 'disabled' },
+      }),
+      AI_TIMEOUTS.streamEstablish,
+      'chatTextStream (establish)',
+    )
     if (response instanceof ReadableStream) return response
     // defensive: some SDK builds may return a Response-like wrapper
     const maybeBody = (response as { body?: ReadableStream<Uint8Array> } | null)?.body

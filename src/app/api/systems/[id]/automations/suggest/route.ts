@@ -2,7 +2,9 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import { chatJSON } from '@/lib/wakeel/ai'
 import { extractFields } from '@/lib/wakeel/fields'
-import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+import { handleRoute, jsonOk } from '@/lib/wakeel/http'
+import { requireOwnedSystem } from '@/lib/auth'
+import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
 
 /**
  * POST /api/systems/[id]/automations/suggest — AUTOMATION LAB.
@@ -89,15 +91,16 @@ function fallbackProposals(
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handleRoute(async () => {
     const { id } = await ctx.params
+    const guard = await requireOwnedSystem(req, id)
+    if (!guard.ok) return guard.res
+    const rl = rateLimit(`suggest:${guard.account.id}`, LIMITS.llmSuggest)
+    if (!rl.ok) return tooManyRequests(rl, 'Suggestion rate limit reached — try again shortly.')
+
     const body: unknown = await req.json().catch(() => ({}))
     const parsed = suggestSchema.safeParse(body ?? {})
     const lang = parsed.success && parsed.data.lang === 'ar' ? 'ar' as const : 'en' as const
 
-    const system = await db.aiSystem.findUnique({
-      where: { id },
-      select: { id: true, name: true, category: true, description: true, blueprint: true },
-    })
-    if (!system) return jsonError(404, 'System not found.')
+    const system = guard.system
 
     let blueprint: Record<string, unknown> = {}
     try {

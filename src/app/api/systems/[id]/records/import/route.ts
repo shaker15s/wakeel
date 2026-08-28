@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import { coerce, extractFields } from '@/lib/wakeel/fields'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+import { requireOwnedSystem } from '@/lib/auth'
+import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
 
 /**
  * POST /api/systems/[id]/records/import — bulk-import records from a CSV the
@@ -31,17 +33,18 @@ const importSchema = z.object({
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handleRoute(async () => {
     const { id } = await ctx.params
+    const guard = await requireOwnedSystem(req, id)
+    if (!guard.ok) return guard.res
+    const rl = rateLimit(`csv:${guard.account.id}`, LIMITS.importCsv)
+    if (!rl.ok) return tooManyRequests(rl, 'Import rate limit reached — try again shortly.')
+
     const body: unknown = await req.json().catch(() => null)
     const parsed = importSchema.safeParse(body)
     if (!parsed.success) {
       return jsonError(400, `Invalid input: rows must be a non-empty array of objects (max ${MAX_ROWS} rows).`)
     }
 
-    const system = await db.aiSystem.findUnique({
-      where: { id },
-      select: { id: true, name: true, userId: true, blueprint: true },
-    })
-    if (!system) return jsonError(404, 'System not found.')
+    const system = guard.system
 
     const fields = extractFields(system.blueprint)
     if (fields.length === 0) {

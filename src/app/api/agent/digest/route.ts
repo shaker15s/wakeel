@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import { chatText } from '@/lib/wakeel/ai'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+import { requireOwnedOperator } from '@/lib/auth'
+import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
 
 /**
  * POST /api/agent/digest — Wakeel proactively drafts a STATUS DIGEST for a
@@ -75,17 +77,19 @@ export async function POST(req: Request) {
     const { userId, systemId } = parsed.data
     const lang = parsed.data.lang === 'ar' ? 'ar' as const : 'en' as const
 
-    const [user, system] = await Promise.all([
-      db.user.findUnique({ where: { id: userId } }),
-      db.aiSystem.findFirst({
-        where: { id: systemId, userId },
-        include: {
-          _count: { select: { records: true } },
-          records: { orderBy: { updatedAt: 'desc' }, take: 3 },
-        },
-      }),
-    ])
-    if (!user) return jsonError(404, 'User not found.')
+    const guard = await requireOwnedOperator(req, userId)
+    if (!guard.ok) return guard.res
+    const rl = rateLimit(`digest:${guard.account.id}`, LIMITS.llmDigest)
+    if (!rl.ok) return tooManyRequests(rl, 'Digest rate limit reached — try again shortly.')
+
+    const user = guard.user
+    const system = await db.aiSystem.findFirst({
+      where: { id: systemId, userId },
+      include: {
+        _count: { select: { records: true } },
+        records: { orderBy: { updatedAt: 'desc' }, take: 3 },
+      },
+    })
     if (!system) return jsonError(404, 'System not found.')
 
     const recordCount = system._count.records

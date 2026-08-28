@@ -11,6 +11,8 @@ import {
   SYSTEM_ICONS,
 } from '@/lib/wakeel/constants'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+import { requireOwnedOperator } from '@/lib/auth'
+import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
 
 const scanSchema = z.object({
   userId: z.string().trim().min(1, 'userId is required'),
@@ -175,8 +177,12 @@ export async function POST(req: Request) {
     const { userId, target, notes } = parsed.data
     const lang = parsed.data.lang === 'ar' ? 'ar' as const : 'en' as const
 
-    const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } })
-    if (!user) return jsonError(404, 'User not found.')
+    // ownership: the operator must belong to the session account
+    const guard = await requireOwnedOperator(req, userId)
+    if (!guard.ok) return guard.res
+    // cost control: discovery is the most expensive route (3 web searches + LLM)
+    const rl = rateLimit(`scan:${guard.account.id}`, LIMITS.llmScan)
+    if (!rl.ok) return tooManyRequests(rl, 'Discovery rate limit reached — try again in a little while.')
 
     // a. open the scan session (everything else happens before we report COMPLETE)
     const scan = await db.scanSession.create({

@@ -161,7 +161,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
     // hard ceiling so a slow LLM/web-search call never hangs the UI forever
-    const timeout = AbortSignal.timeout(180_000);
+    const timeout = AbortSignal.timeout(90_000);
     const signal = init?.signal
       ? AbortSignal.any([init.signal, timeout])
       : timeout;
@@ -187,6 +187,12 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
+    // A dead/rotated session invalidates the console view globally — the
+    // registered handler swaps the UI to the sign-in gate. Auth endpoints
+    // themselves are excluded (a failed login is NOT a dead session).
+    if (res.status === 401 && !path.startsWith("/api/auth/")) {
+      unauthorizedHandler?.();
+    }
     let message = `Request failed (${res.status} ${res.statusText || "Error"})`;
     if (body && typeof body === "object" && "error" in body) {
       const err = (body as { error?: unknown }).error;
@@ -196,6 +202,57 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return body as T;
+}
+
+/* ------------------------------ session layer ------------------------------ */
+
+let unauthorizedHandler: (() => void) | null = null;
+
+/** Register the global "session died" callback (wired once in AppShell). */
+export function setUnauthorizedHandler(fn: () => void): void {
+  unauthorizedHandler = fn;
+}
+
+export interface AccountInfo {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export interface OperatorInfo {
+  id: string;
+  name: string;
+  workspace: string;
+  role?: string | null;
+  createdAt: string;
+}
+
+export function registerAccount(body: {
+  name: string;
+  email: string;
+  password: string;
+}) {
+  return api<{ account: AccountInfo }>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function loginAccount(body: { email: string; password: string }) {
+  return api<{ account: AccountInfo }>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function logoutAccount() {
+  return api<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
+}
+
+export function getMe() {
+  return api<{ account: AccountInfo; operators: OperatorInfo[] }>(
+    "/api/auth/me"
+  );
 }
 
 /* ------------------------------- endpoints -------------------------------- */

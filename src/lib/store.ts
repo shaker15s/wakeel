@@ -10,9 +10,24 @@ export interface LastScanPayload {
   systems: AiSystem[];
 }
 
+/** The authenticated human behind the console (from the httpOnly session). */
+export interface SessionAccount {
+  id: string;
+  email: string;
+  name: string;
+}
+
 interface WakeelState {
   /** operator id, hydrated from localStorage key `wakeel:user` */
   userId: string | null;
+  /**
+   * Server-verified session. The localStorage userId is only a UI preference
+   * for which operator persona to display — ALL access is scoped server-side
+   * by this account. null after the session check fails.
+   */
+  session: SessionAccount | null;
+  /** true once the /api/auth/me check has completed (or failed) */
+  sessionChecked: boolean;
   /** UI language — persisted to localStorage key `wakeel:lang` */
   lang: Lang;
   /** true once the localStorage hydration pass has run (client only) */
@@ -36,6 +51,7 @@ interface WakeelState {
 
   hydrate: () => void;
   setUserId: (id: string | null, opts?: { persist?: boolean }) => void;
+  setSession: (session: SessionAccount | null) => void;
   setLang: (lang: Lang) => void;
   setView: (view: View) => void;
   setConsoleTab: (tab: ConsoleTab) => void;
@@ -65,6 +81,8 @@ function readStoredLang(): Lang {
 
 export const useWakeel = create<WakeelState>((set) => ({
   userId: null,
+  session: null,
+  sessionChecked: false,
   lang: "en",
   hydrated: false,
   view: "landing",
@@ -115,6 +133,8 @@ export const useWakeel = create<WakeelState>((set) => ({
     }
     set({ userId: id });
   },
+
+  setSession: (session) => set({ session, sessionChecked: true }),
 
   setLang: (lang) => {
     try {

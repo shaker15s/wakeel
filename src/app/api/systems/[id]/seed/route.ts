@@ -3,6 +3,8 @@ import { db } from '@/lib/db'
 import { chatJSON } from '@/lib/wakeel/ai'
 import { coerce, extractFields, type TypedField } from '@/lib/wakeel/fields'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+import { requireOwnedSystem } from '@/lib/auth'
+import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
 
 /**
  * POST /api/systems/[id]/seed — grow REAL sample records for a system.
@@ -50,21 +52,21 @@ function templateRecords(fields: TypedField[], count: number): Record<string, un
   return out
 }
 
-/** POST handler — LLM seed with template fallback. */
+/** POST handler — LLM seed with template fallback (owner-only, rate-limited). */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handleRoute(async () => {
     const { id } = await ctx.params
+    const guard = await requireOwnedSystem(req, id)
+    if (!guard.ok) return guard.res
+    const rl = rateLimit(`seed:${guard.account.id}`, LIMITS.llmSeed)
+    if (!rl.ok) return tooManyRequests(rl, 'Seed rate limit reached — try again shortly.')
+
     const body: unknown = await req.json().catch(() => ({}))
     const parsed = seedSchema.safeParse(body ?? {})
     const count = parsed.success && parsed.data.count ? parsed.data.count : 5
     const lang = parsed.success && parsed.data.lang === 'ar' ? 'ar' as const : 'en' as const
 
-    const system = await db.aiSystem.findUnique({
-      where: { id },
-      select: { id: true, name: true, category: true, description: true, userId: true, blueprint: true },
-    })
-    if (!system) return jsonError(404, 'System not found.')
-
+    const system = guard.system
     const fields = extractFields(system.blueprint)
     if (fields.length === 0) {
       return jsonError(400, 'This system blueprint has no typed fields to seed — forge it again or add fields first.')

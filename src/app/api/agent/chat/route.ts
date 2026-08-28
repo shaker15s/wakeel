@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import { chatText, type ChatTurn } from '@/lib/wakeel/ai'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+import { requireOwnedOperator } from '@/lib/auth'
+import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
 
 const chatSchema = z.object({
   userId: z.string().trim().min(1, 'userId is required'),
@@ -13,11 +15,14 @@ const chatSchema = z.object({
 const AGENT_FALLBACK_REPLY =
   'Apologies — my reasoning core flickered out mid-thought. Give me a moment and ask again; in the meantime, all your systems remain under watch.'
 
-/** GET /api/agent/chat?userId= — conversation history, last 50, ascending. */
+/** GET /api/agent/chat?userId= — conversation history, last 50, ascending (owner-only). */
 export async function GET(req: Request) {
   return handleRoute(async () => {
     const userId = new URL(req.url).searchParams.get('userId')
     if (!userId) return jsonError(400, 'userId query parameter is required.')
+
+    const guard = await requireOwnedOperator(req, userId)
+    if (!guard.ok) return guard.res
 
     const messages = await db.chatMessage.findMany({
       where: { userId },
@@ -40,8 +45,12 @@ export async function POST(req: Request) {
     const { userId, message } = parsed.data
     const sessionLang = parsed.data.lang === 'ar' ? 'ar' : 'en'
 
-    const user = await db.user.findUnique({ where: { id: userId } })
-    if (!user) return jsonError(404, 'User not found.')
+    const guard = await requireOwnedOperator(req, userId)
+    if (!guard.ok) return guard.res
+    const rl = rateLimit(`chat:${guard.account.id}`, LIMITS.llmChat)
+    if (!rl.ok) return tooManyRequests(rl, 'Chat rate limit reached — give Wakeel a moment.')
+
+    const user = guard.user
 
     // Build live workspace context: systems + last 8 activities.
     const systems = await db.aiSystem.findMany({

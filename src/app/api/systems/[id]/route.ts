@@ -1,18 +1,23 @@
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+import { requireOwnedSystem } from '@/lib/auth'
+import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
 
-/** GET /api/systems/[id] — one system + its records (newest first). */
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+/** GET /api/systems/[id] — one system + its records, newest first (owner-only, capped). */
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handleRoute(async () => {
     const { id } = await ctx.params
-    const system = await db.aiSystem.findUnique({ where: { id } })
-    if (!system) return jsonError(404, 'System not found.')
+    const guard = await requireOwnedSystem(req, id)
+    if (!guard.ok) return guard.res
 
     const records = await db.systemRecord.findMany({
       where: { systemId: id },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     })
+    // hydrate the full system row for the client (guard carried only a subset)
+    const system = await db.aiSystem.findUnique({ where: { id } })
     return jsonOk({ system, records })
   })
 }
@@ -23,10 +28,13 @@ const patchSystemSchema = z.object({
   description: z.string().trim().max(500).optional(),
 })
 
-/** PATCH /api/systems/[id] — update metadata/status + log activity. */
+/** PATCH /api/systems/[id] — update metadata/status + log activity (owner-only). */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handleRoute(async () => {
     const { id } = await ctx.params
+    const guard = await requireOwnedSystem(req, id)
+    if (!guard.ok) return guard.res
+
     const body: unknown = await req.json().catch(() => null)
     const parsed = patchSystemSchema.safeParse(body)
     if (!parsed.success) {
@@ -65,10 +73,16 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   })
 }
 
-/** DELETE /api/systems/[id] — cascade delete records + log activity. */
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+/** DELETE /api/systems/[id] — cascade delete records + log activity (owner-only). */
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handleRoute(async () => {
     const { id } = await ctx.params
+    const guard = await requireOwnedSystem(req, id)
+    if (!guard.ok) return guard.res
+
+    const rl = rateLimit(`sysdelete:${guard.account.id}`, LIMITS.recordWrite)
+    if (!rl.ok) return tooManyRequests(rl)
+
     const system = await db.aiSystem.findUnique({ where: { id } })
     if (!system) return jsonError(404, 'System not found.')
 

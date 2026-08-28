@@ -8,7 +8,9 @@ import { AppShellSkeleton } from "@/components/app/app-shell-skeleton";
 import { Landing } from "@/components/app/landing/landing";
 import { Console } from "@/components/app/console/console";
 import { OnboardingDialog } from "@/components/app/onboarding-dialog";
+import { AuthScreen } from "@/components/app/auth-screen";
 import { SharedSystemView } from "@/components/app/shared-system-view";
+import { getMe, setUnauthorizedHandler } from "@/lib/api-client";
 import { useWakeel } from "@/lib/store";
 
 /**
@@ -33,11 +35,47 @@ export function AppShell() {
   const hydrated = useWakeel((s) => s.hydrated);
   const lang = useWakeel((s) => s.lang);
   const shareToken = useWakeel((s) => s.shareToken);
+  const session = useWakeel((s) => s.session);
+  const sessionChecked = useWakeel((s) => s.sessionChecked);
   const hydrate = useWakeel((s) => s.hydrate);
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  // global "session died" hook — any API 401 flips the UI to the auth gate
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      useWakeel.setState({ session: null, sessionChecked: true });
+    });
+  }, []);
+
+  // server-verified session bootstrap: /api/auth/me decides everything
+  useEffect(() => {
+    let cancelled = false;
+    getMe()
+      .then(({ account, operators }) => {
+        if (cancelled) return;
+        useWakeel.setState({ session: account, sessionChecked: true });
+        // validate the stored persona against THIS account's workspaces
+        const state = useWakeel.getState();
+        if (state.view === "console") {
+          if (operators.length === 0) {
+            state.setUserId(null, { persist: false });
+            state.setOnboardingOpen(true);
+          } else if (!state.userId || !operators.some((o) => o.id === state.userId)) {
+            state.setUserId(operators[0].id);
+          }
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        useWakeel.setState({ session: null, sessionChecked: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // react to hash changes while running (e.g. paste a share link in-session)
   useEffect(() => {
@@ -85,15 +123,27 @@ export function AppShell() {
             <SharedSystemView token={shareToken} />
           </motion.div>
         ) : view === "console" ? (
-          <motion.div
-            key="console"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-          >
-            <Console />
-          </motion.div>
+          sessionChecked && !session ? (
+            <motion.div
+              key="auth"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <AuthScreen />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="console"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            >
+              <Console />
+            </motion.div>
+          )
         ) : (
           <motion.div
             key="landing"

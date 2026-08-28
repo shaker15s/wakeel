@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+import { requireSession } from '@/lib/auth'
+import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,9 +10,20 @@ const bulkDeleteSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(200),
 })
 
-/** POST /api/records/bulk-delete — delete many records at once (ownership checked). */
+/**
+ * POST /api/records/bulk-delete — delete many records at once.
+ * OWNERSHIP IS ENFORCED: only records whose parent system belongs to the
+ * session account are selected (foreign ids are silently ignored, and the
+ * response never reveals whether they existed).
+ */
 export async function POST(req: Request) {
   return handleRoute(async () => {
+    const guard = await requireSession(req)
+    if (!guard.ok) return guard.res
+
+    const rl = rateLimit(`bulkdelete:${guard.account.id}`, LIMITS.recordWrite)
+    if (!rl.ok) return tooManyRequests(rl)
+
     const body: unknown = await req.json().catch(() => null)
     const parsed = bulkDeleteSchema.safeParse(body)
     if (!parsed.success) {
@@ -18,9 +31,9 @@ export async function POST(req: Request) {
     }
     const ids = [...new Set(parsed.data.ids)]
 
-    // restrict to records whose parent system exists — cascade ownership via system
+    // restrict to records owned by this account (via system → operator → account)
     const records = await db.systemRecord.findMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, system: { user: { accountId: guard.account.id } } },
       select: { id: true, systemId: true, system: { select: { id: true, name: true, userId: true } } },
     })
     if (records.length === 0) return jsonError(404, 'No matching records found.')

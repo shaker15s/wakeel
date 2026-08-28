@@ -1,19 +1,16 @@
 import { randomBytes } from 'crypto'
 import { db } from '@/lib/db'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+import { requireOwnedSystem } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * Share-link management for a system.
+ * Share-link management for a system (owner-only).
  *  GET    — current live link (or null)
  *  POST   — create a link (or return the existing live one)
  *  DELETE — revoke the live link
  */
-
-async function loadSystem(id: string) {
-  return db.aiSystem.findUnique({ where: { id } })
-}
 
 function liveLink(systemId: string) {
   return db.shareLink.findFirst({
@@ -26,21 +23,22 @@ function publicView(link: { token: string; views: number; createdAt: Date }) {
   return { token: link.token, url: `/#share=${link.token}`, views: link.views, createdAt: link.createdAt }
 }
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handleRoute(async () => {
     const { id } = await ctx.params
-    const system = await loadSystem(id)
-    if (!system) return jsonError(404, 'System not found.')
+    const guard = await requireOwnedSystem(req, id)
+    if (!guard.ok) return guard.res
     const link = await liveLink(id)
     return jsonOk({ share: link ? publicView(link) : null })
   })
 }
 
-export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handleRoute(async () => {
     const { id } = await ctx.params
-    const system = await loadSystem(id)
-    if (!system) return jsonError(404, 'System not found.')
+    const guard = await requireOwnedSystem(req, id)
+    if (!guard.ok) return guard.res
+    const system = guard.system
 
     const existing = await liveLink(id)
     if (existing) return jsonOk({ share: publicView(existing), created: false })
@@ -62,11 +60,12 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   })
 }
 
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handleRoute(async () => {
     const { id } = await ctx.params
-    const system = await loadSystem(id)
-    if (!system) return jsonError(404, 'System not found.')
+    const guard = await requireOwnedSystem(req, id)
+    if (!guard.ok) return guard.res
+    const system = guard.system
 
     const link = await liveLink(id)
     if (!link) return jsonError(404, 'No live share link for this system.')

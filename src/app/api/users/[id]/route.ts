@@ -1,12 +1,13 @@
 import { db } from '@/lib/db'
-import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+import { handleRoute, jsonOk } from '@/lib/wakeel/http'
+import { requireOwnedOperator } from '@/lib/auth'
 
-/** GET /api/users/[id] — operator profile + workspace stats. */
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+/** GET /api/users/[id] — operator profile + workspace stats (owner-only). */
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   return handleRoute(async () => {
     const { id } = await ctx.params
-    const user = await db.user.findUnique({ where: { id } })
-    if (!user) return jsonError(404, 'User not found.')
+    const guard = await requireOwnedOperator(req, id)
+    if (!guard.ok) return guard.res
 
     const [systems, discovered, created, records, scans] = await db.$transaction([
       db.aiSystem.count({ where: { userId: id } }),
@@ -17,7 +18,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     ])
 
     return jsonOk({
-      user,
+      user: guard.user,
       stats: { systems, discovered, created, records, scans },
     })
   })

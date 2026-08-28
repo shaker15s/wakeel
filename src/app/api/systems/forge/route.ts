@@ -10,6 +10,8 @@ import {
   SYSTEM_ICONS,
 } from '@/lib/wakeel/constants'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+import { requireOwnedOperator } from '@/lib/auth'
+import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
 
 const forgeSchema = z.object({
   userId: z.string().trim().min(1, 'userId is required'),
@@ -299,8 +301,10 @@ export async function POST(req: Request) {
     const { userId, prompt } = parsed.data
     const lang = parsed.data.lang === 'ar' ? 'ar' as const : 'en' as const
 
-    const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } })
-    if (!user) return jsonError(404, 'User not found.')
+    const guard = await requireOwnedOperator(req, userId)
+    if (!guard.ok) return guard.res
+    const rl = rateLimit(`forge:${guard.account.id}`, LIMITS.llmForge)
+    if (!rl.ok) return tooManyRequests(rl, 'Forge rate limit reached — try again in a little while.')
 
     const userPrompt = `Operator request: "${prompt}"\n\nDesign the system blueprint now. STRICT JSON only.`
 

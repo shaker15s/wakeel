@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
+import { requireOwnedSystem } from '@/lib/auth'
 
 /**
  * POST /api/systems/[id]/automations — wire a NEW automation into the system's
@@ -25,11 +26,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
     const automation = parsed.data.automation
 
-    const system = await db.aiSystem.findUnique({
-      where: { id },
-      select: { id: true, name: true, userId: true, blueprint: true },
-    })
-    if (!system) return jsonError(404, 'System not found.')
+    const guard = await requireOwnedSystem(req, id)
+    if (!guard.ok) return guard.res
+    const system = guard.system
 
     let blueprint: Record<string, unknown>
     try {
