@@ -39,6 +39,8 @@ import { useT } from "@/lib/i18n";
 import { useWakeel } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
+import { ConnectOdooDialog } from "@/components/app/console/connections/connect-odoo-dialog";
+
 function msgTime(iso: string) {
   try {
     return new Date(iso).toLocaleTimeString("en-GB", {
@@ -62,6 +64,8 @@ export function AssistantView() {
   const [draft, setDraft] = useState("");
   const [pendingMsg, setPendingMsg] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState<any>(null);
 
   // Voice State (Web Speech API)
   const [isListening, setIsListening] = useState(false);
@@ -152,12 +156,15 @@ export function AssistantView() {
   // Chat Mutation
   const chatMutation = useMutation({
     mutationFn: (message: string) => sendChat(userId!, message, lang),
-    onSuccess: (res) => {
+    onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ["chat", userId] });
       queryClient.invalidateQueries({ queryKey: ["activity", userId] });
       queryClient.invalidateQueries({ queryKey: ["systems", userId] });
       setPendingMsg(null);
       setActiveAction(null);
+      if (res.approvalCard) {
+        setPendingApproval(res.approvalCard);
+      }
       if (autoSpeak && res.reply) {
         speakText(res.reply);
       }
@@ -166,6 +173,39 @@ export function AssistantView() {
       setPendingMsg(null);
       setActiveAction(null);
       toast.error(t.dock.toastErr, { description: err.message });
+    },
+  });
+
+  // Approval Execution Mutation
+  const approvalMutation = useMutation({
+    mutationFn: async ({ confirmed }: { confirmed: boolean }) => {
+      const res = await fetch("/api/agent/execute-approval", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          toolName: "create_draft_invoice",
+          parameters: pendingApproval?.mutationPayload || {},
+          confirmed,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Execution failed");
+      return data;
+    },
+    onSuccess: (res, variables) => {
+      setPendingApproval(null);
+      queryClient.invalidateQueries({ queryKey: ["chat", userId] });
+      queryClient.invalidateQueries({ queryKey: ["activity", userId] });
+      if (variables.confirmed) {
+        toast.success(lang === "ar" ? "تم إنشاء المسودة بنجاح في Odoo!" : "Draft created successfully in Odoo!");
+        send(lang === "ar" ? "تم تأكيد واعتماد الإجراء، اعرض لي رقم الفاتورة المنشأة" : "Action approved, show me the created invoice");
+      } else {
+        toast.info(lang === "ar" ? "تم إلغاء الإجراء" : "Action cancelled");
+      }
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
     },
   });
 
@@ -229,6 +269,15 @@ export function AssistantView() {
         <div className="flex items-center gap-2">
           <Button
             size="sm"
+            onClick={() => setConnectOpen(true)}
+            className="h-8 border border-gold/40 bg-gold/15 font-mono text-[11px] font-semibold text-gold hover:bg-gold/25"
+          >
+            <Database className="mr-1.5 size-3.5" />
+            {lang === "ar" ? "ربط Odoo 19" : "Connect Odoo"}
+          </Button>
+
+          <Button
+            size="sm"
             variant="outline"
             onClick={() => executeTool("digest", null)}
             disabled={chatMutation.isPending}
@@ -269,6 +318,9 @@ export function AssistantView() {
           </Button>
         </div>
       </div>
+
+      {/* Connect Odoo Dialog Component */}
+      <ConnectOdooDialog open={connectOpen} onOpenChange={setConnectOpen} />
 
       {/* Main Friendly Chat Container */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
@@ -391,6 +443,53 @@ export function AssistantView() {
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {pendingApproval && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="my-2 rounded-xl border-2 border-gold/60 bg-gold/[0.08] p-4 text-sm shadow-[0_0_25px_rgba(232,180,74,0.15)]"
+                >
+                  <div className="flex items-center gap-2 text-gold">
+                    <ShieldCheck className="size-5" />
+                    <h4 className="font-display font-bold">{pendingApproval.title}</h4>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{pendingApproval.description}</p>
+
+                  <div className="my-3 flex flex-col gap-1.5 rounded-lg border border-gold/20 bg-background/80 p-3 font-mono text-xs">
+                    {pendingApproval.details?.map((d: any, i: number) => (
+                      <div key={i} className="flex justify-between">
+                        <span className="text-muted-foreground">{d.label}:</span>
+                        <span className="font-bold text-foreground">{d.value}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => approvalMutation.mutate({ confirmed: true })}
+                      disabled={approvalMutation.isPending}
+                      className="h-9 flex-1 bg-emerald-600 font-mono text-xs font-bold text-white hover:bg-emerald-500"
+                    >
+                      {approvalMutation.isPending ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        lang === "ar" ? "✓ تأكيد واعتماد في Odoo" : "✓ Approve in Odoo"
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => approvalMutation.mutate({ confirmed: false })}
+                      disabled={approvalMutation.isPending}
+                      className="h-9 border-border font-mono text-xs hover:border-destructive hover:text-destructive"
+                    >
+                      {lang === "ar" ? "إلغاء" : "Cancel"}
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
 
               {chatMutation.isPending && (
                 <div className="flex items-center gap-2 self-start rounded-xl border border-border bg-secondary/60 px-4 py-3">

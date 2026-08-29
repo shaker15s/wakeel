@@ -97,42 +97,81 @@ export async function POST(req: Request) {
       `Systems you manage for ${user.name}:`,
       systemsBlock,
       '',
-      'Recent ops ledger:',
-      activityBlock,
-    ].join('\n')
+    // Load active Odoo connection if available
+    const erpSystem = await db.aiSystem.findFirst({
+      where: { userId: guard.user.id, category: 'ERP', status: 'ACTIVE' },
+    });
 
-    const turns: ChatTurn[] = history.map((m) => ({
-      role: m.role === 'USER' ? 'user' : 'assistant',
-      content: m.content,
-    }))
-    turns.push({ role: 'user', content: message })
+    let connector: Odoo19Connector | null = null;
+    if (erpSystem) {
+      try {
+        const config = JSON.parse(erpSystem.blueprint);
+        if (config.url && config.db && config.username) {
+          connector = new Odoo19Connector({
+            url: config.url,
+            db: config.db,
+            username: config.username,
+            apiKeyOrPassword: config.apiKeyOrPassword,
+            operatorId: guard.user.id,
+          });
+        }
+      } catch {
+        // Fallback gracefully
+      }
+    }
 
-    // Save the user's message before generating the reply.
-    await db.chatMessage.create({ data: { userId, role: 'USER', content: message } })
+    // Save the user's message
+    await db.chatMessage.create({ data: { userId, role: 'USER', content: message } });
 
-    const reply = await chatText(systemPrompt, turns)
+    // Execute through AgentRuntime
+    const runtimeResult = await AgentRuntime.run(
+      message,
+      history.map((m) => ({
+        role: m.role === 'USER' ? 'user' : 'assistant',
+        content: m.content,
+      })),
+      {
+        operatorId: guard.user.id,
+        operatorName: user.name,
+        workspaceName: user.workspace,
+        lang: sessionLang,
+        connector,
+      }
+    );
 
     const agentMessage = await db.chatMessage.create({
-      data: { userId, role: 'AGENT', content: reply || AGENT_FALLBACK_REPLY },
-    })
+      data: {
+        userId,
+        role: 'AGENT',
+        content: runtimeResult.reply || AGENT_FALLBACK_REPLY,
+      },
+    });
 
     await db.activity.create({
       data: {
         userId,
         type: 'CHAT',
-        title: `Wakeel handled a request for ${user.name}`,
+        title: `Wakeel handled request for ${user.name}`,
         detail: message.slice(0, 200),
         status: 'DONE',
       },
-    })
+    });
 
     const messages = await db.chatMessage.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 50,
-    })
-    messages.reverse()
+    });
+    messages.reverse();
 
-    return jsonOk({ reply: agentMessage.content, messageId: agentMessage.id, messages }, 201)
-  })
+    return jsonOk(
+      {
+        reply: agentMessage.content,
+        messageId: agentMessage.id,
+        messages,
+        approvalCard: runtimeResult.approvalCard,
+      },
+      201
+    );
+  });
 }
