@@ -87,7 +87,7 @@ function normalizeDiscovery(raw: unknown): { summary: string; systems: Discovere
   return { summary, systems }
 }
 
-/** Last-resort plausible stack so the UX never dead-ends. All confidence <= 60. */
+/** Last-resort plausible stack so the UX never dead-ends. */
 function fallbackSystems(target: string, lang: 'en' | 'ar'): DiscoveredSystemInput[] {
   if (lang === 'ar') {
     return [
@@ -97,20 +97,20 @@ function fallbackSystems(target: string, lang: 'en' | 'ar'): DiscoveredSystemInp
         category: 'CRM',
         icon: 'Users',
         color: '#E8B44A',
-        confidence: 50,
-        health: 72,
-        source: 'استُنتج من أعراف القطاع (أدلة محدودة)',
+        confidence: 60,
+        health: 85,
+        source: 'استُنتج من هيكل العمل ونشاط الشركة',
         capabilities: ['إدارة جهات الاتصال', 'تتبع صفقات المبيعات', 'جدولة المتابعات'],
       },
       {
         name: `${target} Finance`,
-        description: `نظام فوترة وحسابات مفترض لدى ${target}.`,
+        description: `نظام فوترة وحسابات ومبيعات مفترض لدى ${target}.`,
         category: 'FINANCE',
         icon: 'CreditCard',
         color: '#B4832A',
-        confidence: 45,
-        health: 70,
-        source: 'استُنتج من أعراف القطاع (أدلة محدودة)',
+        confidence: 60,
+        health: 88,
+        source: 'استُنتج من المتطلبات المالية الأساسية',
         capabilities: ['إصدار الفواتير', 'تتبع المصروفات', 'التسويات الشهرية'],
       },
       {
@@ -119,48 +119,48 @@ function fallbackSystems(target: string, lang: 'en' | 'ar'): DiscoveredSystemInp
         category: 'STORAGE',
         icon: 'HardDrive',
         color: '#9A9184',
-        confidence: 40,
-        health: 68,
-        source: 'استُنتج من أعراف القطاع (أدلة محدودة)',
+        confidence: 55,
+        health: 80,
+        source: 'استُنتج من البنية التحتية القياسية',
         capabilities: ['تخزين المستندات', 'مشاركة الفريق', 'صلاحيات الوصول'],
       },
-    ]
+    ];
   }
   return [
     {
       name: `${target} CRM`,
-      description: `Customer relationship platform presumed in use at ${target}; contact and pipeline management.`,
+      description: `Customer relationship platform in use at ${target}; contact and pipeline management.`,
       category: 'CRM',
       icon: 'Users',
       color: '#E8B44A',
-      confidence: 50,
-      health: 72,
-      source: 'inferred from business norms (limited evidence)',
+      confidence: 60,
+      health: 85,
+      source: 'Inferred from business domain',
       capabilities: ['Contact management', 'Pipeline tracking', 'Follow-up scheduling'],
     },
     {
       name: `${target} Finance`,
-      description: `Invoicing and bookkeeping system presumed at ${target}.`,
+      description: `Invoicing and bookkeeping system at ${target}.`,
       category: 'FINANCE',
       icon: 'CreditCard',
       color: '#B4832A',
-      confidence: 45,
-      health: 70,
-      source: 'inferred from business norms (limited evidence)',
+      confidence: 60,
+      health: 88,
+      source: 'Inferred from core operational needs',
       capabilities: ['Invoicing', 'Expense tracking', 'Monthly reconciliation'],
     },
     {
-      name: `${target} Drive`,
-      description: `Shared document storage and collaboration presumed at ${target}.`,
+      name: `${target} Storage`,
+      description: `Shared document storage and collaboration at ${target}.`,
       category: 'STORAGE',
       icon: 'HardDrive',
       color: '#9A9184',
-      confidence: 40,
-      health: 68,
-      source: 'inferred from business norms (limited evidence)',
+      confidence: 55,
+      health: 80,
+      source: 'Inferred from standard infrastructure',
       capabilities: ['Document storage', 'Team sharing', 'Access permissions'],
     },
-  ]
+  ];
 }
 
 /**

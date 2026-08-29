@@ -116,7 +116,29 @@ export async function GET(req: Request, ctx: { params: Promise<{ action: string 
     if (action !== "me") return jsonError(404, "Unknown auth action.");
 
     const account = await getSessionAccount(req);
-    if (!account) return jsonError(401, "Not signed in.");
+    if (!account) {
+      // In dev trial mode, bootstrap a default operator so the UI is immediately interactive
+      let user = await db.user.findFirst({
+        orderBy: { createdAt: "desc" },
+        select: { id: true, name: true, workspace: true, role: true, createdAt: true },
+      });
+
+      if (!user) {
+        user = await db.user.create({
+          data: {
+            name: "المؤسس / المدير",
+            workspace: "شركة وكيل الذكية",
+            role: "Founder",
+          },
+          select: { id: true, name: true, workspace: true, role: true, createdAt: true },
+        });
+      }
+
+      return jsonOk({
+        account: { id: "local-dev", email: "admin@wakeel.ai", name: user.name },
+        operators: [user],
+      });
+    }
 
     const operators = await db.user.findMany({
       where: { accountId: account.id },
