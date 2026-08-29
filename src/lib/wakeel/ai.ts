@@ -3,29 +3,21 @@ import ZAI from 'z-ai-web-dev-sdk'
 /**
  * Wakeel AI layer — SERVER ONLY. Never import from client code.
  *
- * Wraps z-ai-web-dev-sdk:
- *  - getZAI():      lazily-initialised SDK singleton
- *  - runWebSearch:  real web research via the `web_search` function
- *  - chatJSON:      LLM completion forced through strict JSON extraction (retry once)
- *  - chatText:      plain completion used by the agent chat
+ * Supports dual-engine execution:
+ *  1. Custom OpenAI-compatible HTTP endpoints (Nvidia NIM, FCC Proxy, StepFun, etc.)
+ *     configured via `AI_BASE_URL` & `AI_API_KEY` in .env.
+ *  2. z-ai-web-dev-sdk fallback if no external AI endpoint is supplied.
  */
 
 let zaiInstance: ZAI | null = null
 
-/**
- * Optional model override — set `WAKEEL_MODEL` in .env to route every
- * completion to a specific model id supported by the ZAI endpoint
- * (e.g. a bigger GLM tier). When unset, the platform default is used
- * and NO `model` field is sent at all — identical to previous behavior.
- */
-const WAKEEL_MODEL = process.env.WAKEEL_MODEL?.trim() || undefined
+// Configuration for OpenAI-compatible proxies (FCC, Nvidia NIM, StepFun 3.7 Flash, etc.)
+const AI_BASE_URL = process.env.AI_BASE_URL?.trim() || process.env.OPENAI_BASE_URL?.trim() || undefined
+const AI_API_KEY = process.env.AI_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim() || 'dummy-key'
+const WAKEEL_MODEL = process.env.WAKEEL_MODEL?.trim() || 'stepfun-ai/step-3.7-flash'
 
 /* --------------------------- timeout discipline --------------------------- */
 
-/** Every outbound AI call is hard-capped so a stalled upstream can never
- * hang an API route (and the client) indefinitely. Tuned per call shape:
- * searches are quick, JSON generations need two attempts, streams only need
- * to ESTABLISH in time — ongoing deltas are the caller's concern. */
 export const AI_TIMEOUTS = {
   search: 20_000,
   json: 60_000,
@@ -124,22 +116,60 @@ function extractJsonCandidate(raw: string): string | null {
 }
 
 /**
+ * Universal chat completion that automatically branches between OpenAI-compatible proxy and ZAI.
+ */
+async function performChatCompletion(messages: Array<{ role: string; content: string }>, stream = false): Promise<unknown> {
+  if (AI_BASE_URL) {
+    const url = `${AI_BASE_URL.replace(/\/+$/, '')}/chat/completions`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${AI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: WAKEEL_MODEL,
+        messages,
+        stream,
+        temperature: 0.2,
+      }),
+    })
+
+    if (!res.ok) {
+      const errText = await res.text()
+      throw new Error(`OpenAI proxy error ${res.status}: ${errText}`)
+    }
+
+    if (stream) {
+      return res.body
+    }
+    return await res.json()
+  }
+
+  // Fallback to ZAI SDK
+  const zai = await getZAI()
+  return await zai.chat.completions.create({
+    ...(WAKEEL_MODEL ? { model: WAKEEL_MODEL } : {}),
+    messages: messages as any,
+    stream,
+    thinking: { type: 'disabled' },
+  })
+}
+
+/**
  * LLM completion constrained to JSON. Retries once on parse failure.
  * Returns the parsed value, or null on total failure.
  */
 export async function chatJSON(systemPrompt: string, userPrompt: string): Promise<unknown> {
+  const messages = [
+    { role: 'assistant', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ]
+
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const zai = await getZAI()
       const response: unknown = await withTimeout(
-        zai.chat.completions.create({
-          ...(WAKEEL_MODEL ? { model: WAKEEL_MODEL } : {}),
-          messages: [
-            { role: 'assistant', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          thinking: { type: 'disabled' },
-        }),
+        performChatCompletion(messages, false),
         AI_TIMEOUTS.json,
         `chatJSON attempt ${attempt}`,
       )
@@ -169,16 +199,12 @@ export interface ChatTurn {
 /** Plain conversational completion for the agent chat. Returns '' on failure. */
 export async function chatText(systemPrompt: string, messages: ChatTurn[]): Promise<string> {
   try {
-    const zai = await getZAI()
+    const chatMessages = [
+      { role: 'assistant', content: systemPrompt },
+      ...messages,
+    ]
     const response: unknown = await withTimeout(
-      zai.chat.completions.create({
-        ...(WAKEEL_MODEL ? { model: WAKEEL_MODEL } : {}),
-        messages: [
-          { role: 'assistant', content: systemPrompt },
-          ...messages,
-        ],
-        thinking: { type: 'disabled' },
-      }),
+      performChatCompletion(chatMessages, false),
       AI_TIMEOUTS.text,
       'chatText',
     )
@@ -191,32 +217,22 @@ export async function chatText(systemPrompt: string, messages: ChatTurn[]): Prom
 
 /**
  * Streaming conversational completion for the agent chat.
- * Asks the SDK for `stream: true` — the SDK hands back the upstream SSE
- * ReadableStream (OpenAI-style `data: {choices:[{delta:{content}}]}` lines).
- * Returns that raw stream for the caller to parse, or null on failure
- * (callers should fall back to chatText).
  */
 export async function chatTextStream(
   systemPrompt: string,
   messages: ChatTurn[]
 ): Promise<ReadableStream<Uint8Array> | null> {
   try {
-    const zai = await getZAI()
-    const response: unknown = await withTimeout(
-      zai.chat.completions.create({
-        ...(WAKEEL_MODEL ? { model: WAKEEL_MODEL } : {}),
-        messages: [
-          { role: 'assistant', content: systemPrompt },
-          ...messages,
-        ],
-        stream: true,
-        thinking: { type: 'disabled' },
-      }),
+    const chatMessages = [
+      { role: 'assistant', content: systemPrompt },
+      ...messages,
+    ]
+    const response = await withTimeout(
+      performChatCompletion(chatMessages, true),
       AI_TIMEOUTS.streamEstablish,
       'chatTextStream (establish)',
     )
     if (response instanceof ReadableStream) return response
-    // defensive: some SDK builds may return a Response-like wrapper
     const maybeBody = (response as { body?: ReadableStream<Uint8Array> } | null)?.body
     return maybeBody instanceof ReadableStream ? maybeBody : null
   } catch (error) {

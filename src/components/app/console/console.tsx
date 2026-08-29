@@ -12,6 +12,7 @@ import { SystemDetailDialog } from "@/components/app/console/system-detail-dialo
 import { CommandPalette } from "@/components/app/console/command-palette";
 import { BootSequence } from "@/components/app/console/boot-sequence";
 import { GuidedTour } from "@/components/app/console/guided-tour";
+import { AssistantView } from "@/components/app/console/views/assistant-view";
 import { OverviewView } from "@/components/app/console/views/overview";
 import { DiscoveryView } from "@/components/app/console/views/discovery";
 import { SystemsView } from "@/components/app/console/views/systems";
@@ -29,16 +30,17 @@ const VIEW_MOTION = {
   transition: { duration: 0.24, ease: "easeOut" as const },
 };
 
-/** Digit-hotkeys 1–5 jump between console views (inputs & dialogs excluded). */
+/** Digit-hotkeys 1–6 jump between console views (inputs & dialogs excluded). */
 function useViewHotkeys() {
   const setConsoleTab = useWakeel((s) => s.setConsoleTab);
   useEffect(() => {
     const map: Record<string, ConsoleTab> = {
-      "1": "overview",
-      "2": "discovery",
-      "3": "systems",
-      "4": "forge",
-      "5": "activity",
+      "1": "assistant",
+      "2": "overview",
+      "3": "discovery",
+      "4": "systems",
+      "5": "forge",
+      "6": "activity",
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -97,6 +99,7 @@ export function Console() {
               {...VIEW_MOTION}
               className="relative mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8"
             >
+              {consoleTab === "assistant" && <AssistantView />}
               {consoleTab === "overview" && <OverviewView />}
               {consoleTab === "discovery" && <DiscoveryView />}
               {consoleTab === "systems" && <SystemsView />}

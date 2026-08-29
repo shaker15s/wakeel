@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bot,
   Database,
   Hammer,
   LayoutDashboard,
@@ -20,6 +21,7 @@ interface NavItem {
 }
 
 const NAV_META: NavItem[] = [
+  { id: "assistant", icon: Bot },
   { id: "overview", icon: LayoutDashboard },
   { id: "discovery", icon: Radar },
   { id: "systems", icon: Database },
@@ -31,6 +33,7 @@ const NAV_META: NavItem[] = [
 export function useNavItems() {
   const t = useT();
   const labels: Record<ConsoleTab, string> = {
+    assistant: t.side.assistant,
     overview: t.side.overview,
     discovery: t.side.discovery,
     systems: t.side.systems,

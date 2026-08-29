@@ -160,6 +160,18 @@ export function OnboardingDialog() {
             </DialogHeader>
 
             <form onSubmit={submit} className="mt-6 flex flex-col gap-4" noValidate>
+              {/* Beginner Choice: Create New vs Connect Stack */}
+              <div className="rounded-lg border border-gold/30 bg-gold/5 p-3">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-gold">
+                  {t.onb.role === "Role" ? "Choose Setup Flow" : "اختر مسار البدء"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t.onb.role === "Role"
+                    ? "Start fresh with a simple assistant or connect and discover your existing ERP / CRM stack."
+                    : "ابدأ بسهولة مع موظفك الذكي، أو دعه يستكشف ويرتبط بأنظمتك الحالية (ERP / CRM)."}
+                </p>
+              </div>
+
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="op-name" className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                   {t.onb.fullName}

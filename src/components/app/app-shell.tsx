@@ -123,27 +123,15 @@ export function AppShell() {
             <SharedSystemView token={shareToken} />
           </motion.div>
         ) : view === "console" ? (
-          sessionChecked && !session ? (
-            <motion.div
-              key="auth"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.25 }}
-            >
-              <AuthScreen />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="console"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-            >
-              <Console />
-            </motion.div>
-          )
+          <motion.div
+            key="console"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+          >
+            <Console />
+          </motion.div>
         ) : (
           <motion.div
             key="landing"

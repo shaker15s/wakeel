@@ -284,6 +284,7 @@ export const en = {
   },
 
   side: {
+    assistant: "AI Assistant",
     overview: "Overview",
     discovery: "Discovery",
     systems: "Systems",
@@ -291,7 +292,7 @@ export const en = {
     activity: "Activity",
     version: "WAKEEL v0.1 · و",
     navLabel: "Console navigation",
-    hintKeys: "PRESS 1–5 TO SWITCH VIEWS",
+    hintKeys: "PRESS 1–6 TO SWITCH VIEWS",
   },
 
   ov: {
@@ -1011,6 +1012,7 @@ export const ar: Dict = {
   },
 
   side: {
+    assistant: "المساعد الذكي (الموظف)",
     overview: "نظرة عامة",
     discovery: "الاستكشاف",
     systems: "الأنظمة",
@@ -1018,7 +1020,7 @@ export const ar: Dict = {
     activity: "النشاط",
     version: "واكيل v0.1 · و",
     navLabel: "تنقل الكونسول",
-    hintKeys: "اضغط 1–5 لتبديل الشاشات",
+    hintKeys: "اضغط 1–6 لتبديل الشاشات",
   },
 
   ov: {

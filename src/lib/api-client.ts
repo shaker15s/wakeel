@@ -11,6 +11,7 @@
 export type View = "landing" | "console" | "share";
 
 export type ConsoleTab =
+  | "assistant"
   | "overview"
   | "discovery"
   | "systems"

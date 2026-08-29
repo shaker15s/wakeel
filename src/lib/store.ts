@@ -87,7 +87,7 @@ export const useWakeel = create<WakeelState>((set) => ({
   hydrated: false,
   view: "landing",
   shareToken: null,
-  consoleTab: "overview",
+  consoleTab: "assistant",
   agentDockOpen: false,
   onboardingOpen: false,
   paletteOpen: false,
