@@ -117,6 +117,42 @@ honors a denial — i.e., it tests the *executor's* contract with
 `PolicyEngine`, not a fact about today's policy rules. This is disclosed, not
 hidden.
 
+## Addendum — live, no-login demo surface (added after initial milestone completion)
+
+The user has no real Odoo instance available, so after this milestone's core
+runtime landed, a self-contained demo was wired up to make the runtime's
+behavior directly observable (not just asserted by unit tests): a new page
+and API, both decoupled from the real authenticated app and from Prisma
+(confirmed, again, that `prisma generate` cannot reach
+`binaries.prisma.sh` in this sandbox — see `00-repo-audit.md` and
+`docs/adr/0001-in-process-durable-execution.md`).
+
+- `src/app/demo/invoice/page.tsx` — a client page matching the existing OPS
+  DECK dark/gold design system, with a request form, an animated 5-step
+  tracker, a real approval card (with the actual action hash shown), a fault
+  -injection selector to visibly trigger the idempotency/reconciliation
+  behavior on demand, a result card, and an expandable audit-trail of every
+  `TaskEvent`.
+- `src/app/api/demo/invoice-task/route.ts` and
+  `src/app/api/demo/invoice-task/[taskId]/route.ts` — thin HTTP wrappers
+  around `createCreateDraftInvoiceTask`/`advance`/`decideApproval`, scoped to
+  an anonymous, cookie-based "demo tenant" (no login, no real account —
+  `src/server/runtime/demo-tenant.ts`), backed by a process-wide singleton
+  `InMemoryTaskStore` + `FakeERPConnector` (`src/server/runtime/demo-store.ts`).
+- **Verified live in this session**, via `next dev` + `curl` (not just unit
+  tests): full happy path end to end (create → approve → execute → verify →
+  `succeeded`), rejection path, `crash_after_write` fault injection actually
+  reconciling to `succeeded` with exactly one fake invoice created, a
+  cross-tenant request (no cookie) correctly getting 404 instead of another
+  session's task, and invalid input correctly getting 400 before touching
+  policy/connector. `GET /demo/invoice` renders 200 with the expected content.
+- This surface is explicitly a demo/sandbox, never production: it carries no
+  real credentials, talks only to `FakeERPConnector`, and uses a throwaway
+  cookie identity instead of the real account/session system in
+  `src/lib/auth.ts`. It does not replace the still-outstanding need for a
+  real Prisma-backed `TaskStore` and real authenticated API wiring (see
+  "What this milestone deliberately does NOT include" above — unchanged).
+
 ## Residual risks / explicit gaps carried forward
 
 1. **In-memory store does not survive a process restart** and has no
