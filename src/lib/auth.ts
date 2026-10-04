@@ -65,17 +65,48 @@ const SESSION_COOKIE = "wakeel_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const SESSION_TTL_MS = SESSION_TTL_SECONDS * 1000;
 
+/**
+ * Whether unauthenticated requests may fall back to an implicit "local trial"
+ * operator instead of being rejected with 401.
+ *
+ * SECURITY: this used to be unconditional (always on, regardless of
+ * environment), which meant any unauthenticated caller against a real
+ * deployment could silently impersonate an arbitrary pre-existing operator
+ * workspace (or create a new one). It is now opt-in and OFF by default in
+ * production; outside production it stays on by default to preserve the
+ * frictionless local/demo experience the fallback was built for.
+ * See docs/implementation/00-repo-audit.md §5.2.
+ */
+export function allowUnauthenticatedFallback(): boolean {
+  if (process.env.NODE_ENV === "production") {
+    return process.env.WAKEEL_ALLOW_UNAUTHENTICATED_TRIAL === "true";
+  }
+  return true;
+}
+
+// Cache of the dev-only fallback secret. MUST be generated at most once per
+// process: the previous implementation called randomBytes() fresh on every
+// sessionSecret() invocation, so createSessionToken() and verifySessionToken()
+// signed with two different secrets on every single call and no session ever
+// verified successfully without AUTH_SECRET set — login "worked" (returned a
+// cookie) but every subsequent authenticated request silently looked
+// unauthenticated. See docs/implementation/00-repo-audit.md.
+let devSessionSecret: string | null = null;
+
 function sessionSecret(): string {
   const secret = process.env.AUTH_SECRET?.trim();
-  if (!secret) {
-    // Fail loudly in production; in dev fall back to a per-boot random secret
-    // (sessions reset on restart — acceptable, never silently insecure).
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("AUTH_SECRET is required in production");
-    }
-    return randomBytes(32).toString("hex");
+  if (secret) return secret;
+
+  // Fail loudly in production; outside production, fall back to one random
+  // secret for the lifetime of this process (sessions reset on restart —
+  // acceptable, never silently insecure).
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("AUTH_SECRET is required in production");
   }
-  return secret;
+  if (!devSessionSecret) {
+    devSessionSecret = randomBytes(32).toString("hex");
+  }
+  return devSessionSecret;
 }
 
 function b64url(input: string | Buffer): string {
@@ -198,9 +229,17 @@ export async function requireOwnedOperator(
   userId: string | null | undefined,
 ): Promise<OperatorGuard> {
   const account = await getSessionAccount(req);
-  
-  // In development / local trial mode, resolve operator directly if session is absent
+
+  // Unauthenticated local-trial fallback — opt-in outside dev, see
+  // allowUnauthenticatedFallback(). When disabled, no session means 401.
   if (!account) {
+    if (!allowUnauthenticatedFallback()) {
+      return {
+        ok: false,
+        res: NextResponse.json({ error: "Authentication required." }, { status: 401 }),
+      };
+    }
+
     let fallbackUser = userId
       ? await db.user.findUnique({
           where: { id: userId },
@@ -229,6 +268,11 @@ export async function requireOwnedOperator(
     };
   }
 
+  // SECURITY: when a userId is supplied (every real caller supplies one — see
+  // docs/implementation/00-repo-audit.md §5.1), it MUST belong to the
+  // authenticated account. Fetching it by id alone and skipping this check
+  // was a cross-tenant IDOR: any authenticated account could read/mutate any
+  // other account's operator workspace by passing its id.
   const user: OwnedOperator | null = userId
     ? await db.user.findUnique({
         where: { id: userId },
@@ -249,6 +293,17 @@ export async function requireOwnedOperator(
       ),
     };
   }
+
+  if (userId && user.accountId !== account.id) {
+    return {
+      ok: false,
+      res: NextResponse.json(
+        { error: "This workspace does not belong to your account." },
+        { status: 403 },
+      ),
+    };
+  }
+
   return { ok: true, account, user };
 }
 
@@ -260,6 +315,12 @@ export type SessionGuard =
 export async function requireSession(req: Request): Promise<SessionGuard> {
   const account = await getSessionAccount(req);
   if (!account) {
+    if (!allowUnauthenticatedFallback()) {
+      return {
+        ok: false,
+        res: NextResponse.json({ error: "Authentication required." }, { status: 401 }),
+      };
+    }
     return {
       ok: true,
       account: { id: "local-dev", email: "operator@local.dev", name: "Operator" },
