@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
@@ -20,8 +20,16 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { AgentOrb, type AgentOrbState } from "@/components/app/agent-orb";
 import { WakeelMark } from "@/components/app/logo";
-import { MonoLabel, Reveal, Stagger, StaggerItem, usePrefersReducedMotion } from "@/components/app/motion-bits";
+import {
+  MonoLabel,
+  Reveal,
+  ScrambleText,
+  Stagger,
+  StaggerItem,
+  usePrefersReducedMotion,
+} from "@/components/app/motion-bits";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -47,6 +55,17 @@ const STEP_META: Record<string, { label: string; icon: typeof ShieldCheck }> = {
 };
 
 const STEP_ORDER = ["validate_input", "policy_check", "await_approval", "execute_write", "verify"];
+
+/** What the agent is "thinking" while a given step is active — this is the
+ * whole point of the console below: make the otherwise-invisible runtime
+ * legible as something reasoning, not a spinner. */
+const THOUGHTS: Record<string, string[]> = {
+  validate_input: ["Parsing the invoice payload against the input schema…", "Checking customer id and line totals are well-formed…"],
+  policy_check: ["Evaluating this write against the approval policy…", "Classifying risk tier from amount and customer…"],
+  await_approval: ["Holding — nothing executes until a human decides, explicitly.", "Action hash computed and bound to this exact request."],
+  execute_write: ["Issuing an idempotent write to the ERP connector…", "This call is keyed — replaying it is safe, never duplicated."],
+  verify: ["Reading the record back from the source of truth…", "Confirming the write actually landed as claimed."],
+};
 
 function stepTone(status: string): string {
   switch (status) {
@@ -82,24 +101,121 @@ function taskToneBadge(status: string): { label: string; className: string } {
   }
 }
 
+function orbStateForTask(task: TaskView | null): AgentOrbState {
+  if (!task) return "idle";
+  if (task.result?.outcome === "failed") return "error";
+  if (task.result?.outcome === "succeeded" || task.result?.outcome === "partially_succeeded") return "success";
+  if (task.status === "waiting_for_approval") return "waiting";
+  return "thinking";
+}
+
+function statusAnnouncement(task: TaskView | null): string {
+  if (!task) return "";
+  if (task.status === "waiting_for_approval") return "The agent is waiting for your approval decision.";
+  if (task.result) return task.result.summary;
+  return "The agent is working on your request.";
+}
+
 /* --------------------------------- ambient backdrop ------------------------------ */
 
+const PARTICLES = [
+  { x: 10, y: 18, d: 1.1, delay: 0 },
+  { x: 86, y: 14, d: 1.8, delay: 0.6 },
+  { x: 22, y: 72, d: 0.6, delay: 1.2 },
+  { x: 72, y: 62, d: 1.4, delay: 0.3 },
+  { x: 92, y: 82, d: 0.9, delay: 1 },
+  { x: 6, y: 54, d: 1.2, delay: 1.6 },
+  { x: 50, y: 88, d: 0.7, delay: 0.8 },
+];
+
 function AmbientBackdrop() {
+  const reduced = usePrefersReducedMotion();
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-      <div
-        className="absolute -top-40 left-1/2 h-[560px] w-[900px] -translate-x-1/2 rounded-full opacity-[0.12] blur-[120px]"
+      <motion.div
+        className="absolute left-1/2 top-[-22rem] h-[640px] w-[960px] -translate-x-1/2 rounded-full opacity-[0.15] blur-[130px]"
         style={{ background: "radial-gradient(closest-side, var(--gold), transparent)" }}
+        animate={reduced ? undefined : { x: [0, 40, -30, 0], y: [0, 24, -12, 0] }}
+        transition={{ duration: 24, repeat: Infinity, ease: "easeInOut" }}
       />
-      <div
-        className="absolute inset-0 opacity-[0.035]"
+      {!reduced && (
+        <motion.div
+          className="absolute left-1/2 top-16 size-[640px] -translate-x-1/2 rounded-full opacity-[0.06]"
+          style={{
+            background:
+              "conic-gradient(from 0deg, transparent 0deg, var(--gold) 10deg, transparent 50deg, transparent 360deg)",
+          }}
+          animate={{ rotate: 360 }}
+          transition={{ duration: 16, repeat: Infinity, ease: "linear" }}
+        />
+      )}
+      <motion.div
+        className="absolute inset-0 opacity-[0.045]"
         style={{
           backgroundImage:
             "linear-gradient(to right, var(--foreground) 1px, transparent 1px), linear-gradient(to bottom, var(--foreground) 1px, transparent 1px)",
-          backgroundSize: "44px 44px",
+          backgroundSize: "46px 46px",
         }}
+        animate={reduced ? undefined : { backgroundPositionY: ["0px", "46px"] }}
+        transition={{ duration: 7, repeat: Infinity, ease: "linear" }}
+      />
+      {!reduced &&
+        PARTICLES.map((p, i) => (
+          <motion.span
+            key={i}
+            className="absolute size-1 rounded-full bg-gold/50"
+            style={{ left: `${p.x}%`, top: `${p.y}%` }}
+            animate={{ y: [0, -18, 0], opacity: [0.15, 0.75, 0.15] }}
+            transition={{ duration: 5 + p.d, repeat: Infinity, ease: "easeInOut", delay: p.delay }}
+          />
+        ))}
+      <div
+        className="absolute inset-0"
+        style={{ background: "radial-gradient(ellipse 60% 50% at 50% 20%, transparent 40%, var(--background) 100%)" }}
       />
     </div>
+  );
+}
+
+/* --------------------------------- reasoning console ------------------------------ */
+
+function ReasoningConsole({ task }: { task: TaskView }) {
+  const running = task.steps.find((s) => s.status === "running");
+  const activeName = running?.name ?? (task.status === "waiting_for_approval" ? "await_approval" : null);
+  const lines = activeName ? (THOUGHTS[activeName] ?? []) : [];
+  if (!activeName || lines.length === 0) return null;
+
+  return (
+    <motion.div
+      key={activeName}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25 }}
+      className="rounded-lg border border-gold/20 bg-black/30 p-4 font-mono text-xs text-gold/90 shadow-[inset_0_1px_18px_rgba(0,0,0,0.45)]"
+    >
+      <div className="mb-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span className="relative flex size-1.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold opacity-75" />
+          <span className="relative inline-flex size-1.5 rounded-full bg-gold" />
+        </span>
+        Agent reasoning
+      </div>
+      <div className="space-y-1.5">
+        {lines.map((line, i) => (
+          <div key={line} className="flex gap-1.5">
+            <span className="shrink-0 text-gold/50">›</span>
+            <ScrambleText text={line} speed={12} startDelay={i * 550} />
+          </div>
+        ))}
+        <motion.span
+          aria-hidden
+          className="inline-block h-3 w-1.5 translate-y-0.5 bg-gold/70"
+          animate={{ opacity: [1, 0, 1] }}
+          transition={{ duration: 1, repeat: Infinity }}
+        />
+      </div>
+    </motion.div>
   );
 }
 
@@ -115,17 +231,15 @@ function StepTracker({ task }: { task: TaskView }) {
         const meta = STEP_META[name];
         const Icon = meta.icon;
         const status = step?.status ?? "pending";
+        const nextStep = stepsByName.get(STEP_ORDER[i + 1]);
+        const isActiveConnector = status === "running" || nextStep?.status === "running";
         return (
           <div key={name} className="flex flex-1 items-center last:flex-none">
             <div className="flex flex-col items-center gap-1.5">
               <motion.div
                 layout
                 initial={false}
-                animate={
-                  status === "running" && !reduced
-                    ? { scale: [1, 1.1, 1] }
-                    : { scale: 1 }
-                }
+                animate={status === "running" && !reduced ? { scale: [1, 1.1, 1] } : { scale: 1 }}
                 transition={{ duration: 1.3, repeat: status === "running" && !reduced ? Infinity : 0, ease: "easeInOut" }}
                 className={cn(
                   "flex size-10 items-center justify-center rounded-full border-2 transition-colors duration-300",
@@ -170,6 +284,14 @@ function StepTracker({ task }: { task: TaskView }) {
                   animate={{ width: status === "succeeded" ? "100%" : "0%" }}
                   transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
                 />
+                {!reduced && isActiveConnector && status !== "succeeded" && (
+                  <motion.span
+                    aria-hidden
+                    className="absolute top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-gold shadow-[0_0_8px_2px_rgba(232,180,74,0.7)]"
+                    animate={{ left: ["0%", "100%"] }}
+                    transition={{ duration: 1.1, repeat: Infinity, ease: "linear" }}
+                  />
+                )}
               </div>
             )}
           </div>
@@ -193,6 +315,8 @@ function ApprovalCard({
   const approval = task.pendingApproval!;
   const [reason, setReason] = useState("");
   const [fault, setFault] = useState<FaultInjection>("none");
+  const reasonId = useId();
+  const faultId = useId();
   const input = task.input as { customerId: string; lines: DemoInvoiceLine[]; memo?: string };
   const amount = input.lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
 
@@ -212,10 +336,7 @@ function ApprovalCard({
         />
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
-            <motion.div
-              animate={{ rotate: [0, -8, 8, 0] }}
-              transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 2 }}
-            >
+            <motion.div animate={{ rotate: [0, -8, 8, 0] }} transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 2 }}>
               <UserCheck className="size-5 text-gold" />
             </motion.div>
             <div>
@@ -248,10 +369,11 @@ function ApprovalCard({
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
+          <label htmlFor={faultId} className="text-xs font-medium text-muted-foreground">
             Simulate an ERP fault on write (optional, to see the runtime&apos;s reliability behavior)
           </label>
           <select
+            id={faultId}
             value={fault}
             onChange={(e) => setFault(e.target.value as FaultInjection)}
             className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground outline-none transition-shadow focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -263,20 +385,22 @@ function ApprovalCard({
           </select>
         </div>
 
-        <Textarea
-          placeholder="Reason (required if rejecting, optional if approving)"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          className="min-h-12 text-sm"
-        />
+        <div className="space-y-1.5">
+          <label htmlFor={reasonId} className="sr-only">
+            Reason for your decision
+          </label>
+          <Textarea
+            id={reasonId}
+            placeholder="Reason (required if rejecting, optional if approving)"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="min-h-12 text-sm"
+          />
+        </div>
 
         <div className="flex gap-2">
           <motion.div className="flex-1" whileTap={{ scale: 0.97 }}>
-            <Button
-              disabled={deciding}
-              onClick={() => onDecide("approved", reason || undefined, fault)}
-              className="w-full gap-1.5"
-            >
+            <Button disabled={deciding} onClick={() => onDecide("approved", reason || undefined, fault)} className="w-full gap-1.5">
               {deciding ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
               Approve
             </Button>
@@ -315,11 +439,7 @@ function ResultCard({ task }: { task: TaskView }) {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
-      animate={
-        isFailure
-          ? { opacity: 1, scale: 1, x: [0, -6, 6, -4, 4, 0] }
-          : { opacity: 1, scale: 1 }
-      }
+      animate={isFailure ? { opacity: 1, scale: 1, x: [0, -6, 6, -4, 4, 0] } : { opacity: 1, scale: 1 }}
       transition={{ duration: isFailure ? 0.45 : 0.3, ease: [0.22, 1, 0.36, 1] }}
     >
       <Card className={cn("gap-2 p-5", tone.className)}>
@@ -331,16 +451,9 @@ function ResultCard({ task }: { task: TaskView }) {
           >
             <Icon className="size-5" />
           </motion.div>
-          <span className="font-display text-sm font-semibold capitalize">
-            {task.result.outcome.replace(/_/g, " ")}
-          </span>
+          <span className="font-display text-sm font-semibold capitalize">{task.result.outcome.replace(/_/g, " ")}</span>
           {isSuccess && (
-            <motion.span
-              initial={{ opacity: 0, x: -4 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-              className="ml-auto"
-            >
+            <motion.span initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} className="ml-auto">
               <Sparkles className="size-4 text-live" />
             </motion.span>
           )}
@@ -366,7 +479,8 @@ function AuditTrail({ task }: { task: TaskView }) {
     <div>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between rounded-md border border-border px-3 py-2 text-xs font-mono uppercase tracking-wider text-muted-foreground transition-colors hover:border-gold/30 hover:text-foreground"
+        aria-expanded={open}
+        className="flex w-full items-center justify-between rounded-md border border-border px-3 py-2 text-xs font-mono uppercase tracking-wider text-muted-foreground transition-colors hover:border-gold/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
       >
         <span className="flex items-center gap-1.5">
           <History className="size-3.5" /> Audit trail ({task.events.length} events)
@@ -421,8 +535,11 @@ export default function DemoInvoicePage() {
   const [task, setTask] = useState<TaskView | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deciding, setDeciding] = useState(false);
+  const customerIdFieldId = useId();
+  const memoFieldId = useId();
 
   const amount = lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unitPrice) || 0), 0);
+  const orbState = orbStateForTask(task);
 
   function updateLine(i: number, patch: Partial<DemoInvoiceLine>) {
     setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -468,17 +585,17 @@ export default function DemoInvoicePage() {
   return (
     <main className="relative min-h-screen bg-background px-4 py-10 text-foreground sm:px-8">
       <AmbientBackdrop />
+      {/* One clear, non-visual status announcement per change — kept separate
+          from the orb (decorative) and the badge (re-renders constantly). */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {statusAnnouncement(task)}
+      </div>
       <div className="relative mx-auto max-w-4xl space-y-8">
         <Reveal>
-          <header className="space-y-3">
+          <header className="space-y-4">
             <div className="flex items-center gap-2">
-              <motion.div
-                animate={{ rotate: [0, 6, -6, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-              >
-                <WakeelMark className="size-7" />
-              </motion.div>
-              <span className="font-display text-lg font-bold tracking-tight">Wakeel</span>
+              <WakeelMark className="size-6" />
+              <span className="font-display text-base font-bold tracking-tight">Wakeel</span>
               <Badge variant="outline" className="gap-1 border-gold/40 text-gold">
                 <FlaskConical className="size-3" /> Runtime demo
               </Badge>
@@ -490,15 +607,30 @@ export default function DemoInvoicePage() {
                 Live
               </span>
             </div>
-            <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-              Draft-invoice runtime — live, sandboxed, no Odoo required
-            </h1>
+
+            <div className="flex items-center gap-4">
+              <AgentOrb state={orbState} size={72} />
+              <div className="space-y-1.5">
+                <h1 className="font-display text-2xl font-bold tracking-tight sm:text-4xl">
+                  <span
+                    className="bg-gradient-to-br from-gold-pale via-gold to-gold-deep bg-clip-text text-transparent"
+                  >
+                    Watch the agent work
+                  </span>
+                  , not just the result.
+                </h1>
+                <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+                  create_draft_invoice · durable runtime · zero mocked network calls
+                </p>
+              </div>
+            </div>
+
             <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
               This page talks to the actual durable Task/Approval/Idempotency runtime (
               <code className="rounded bg-secondary px-1 py-0.5 font-mono text-xs">src/server/runtime</code>) over a
-              real HTTP API — nothing here is mocked in the frontend. It runs against an in-memory fake ERP connector
-              instead of a real Odoo instance, so you can see every safety property (mandatory approval, idempotent
-              writes, crash recovery, verified results) actually execute without needing real ERP credentials.
+              real HTTP API. It runs against an in-memory fake ERP connector instead of a real Odoo instance, so every
+              safety property — mandatory approval, idempotent writes, crash recovery, verified results — actually
+              executes in front of you, with the agent&apos;s reasoning visible at each step.
             </p>
           </header>
         </Reveal>
@@ -508,17 +640,21 @@ export default function DemoInvoicePage() {
             <MonoLabel gold>[ Step 1 — describe the invoice ]</MonoLabel>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Customer ID</label>
-                <Input value={customerId} onChange={(e) => setCustomerId(e.target.value)} disabled={!!task} />
+                <label htmlFor={customerIdFieldId} className="text-xs font-medium text-muted-foreground">
+                  Customer ID
+                </label>
+                <Input id={customerIdFieldId} value={customerId} onChange={(e) => setCustomerId(e.target.value)} disabled={!!task} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Memo (optional)</label>
-                <Input value={memo} onChange={(e) => setMemo(e.target.value)} disabled={!!task} placeholder="e.g. PO-2291" />
+                <label htmlFor={memoFieldId} className="text-xs font-medium text-muted-foreground">
+                  Memo (optional)
+                </label>
+                <Input id={memoFieldId} value={memo} onChange={(e) => setMemo(e.target.value)} disabled={!!task} placeholder="e.g. PO-2291" />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">Line items</label>
+            <fieldset className="space-y-2">
+              <legend className="text-xs font-medium text-muted-foreground">Line items</legend>
               <AnimatePresence initial={false}>
                 {lines.map((line, i) => (
                   <motion.div
@@ -531,6 +667,7 @@ export default function DemoInvoicePage() {
                     className="flex flex-wrap items-center gap-2"
                   >
                     <Input
+                      aria-label={`Line ${i + 1} description`}
                       className="min-w-[10rem] flex-1"
                       placeholder="Description"
                       value={line.description}
@@ -538,6 +675,7 @@ export default function DemoInvoicePage() {
                       onChange={(e) => updateLine(i, { description: e.target.value })}
                     />
                     <Input
+                      aria-label={`Line ${i + 1} quantity`}
                       type="number"
                       className="w-24"
                       placeholder="Qty"
@@ -546,6 +684,7 @@ export default function DemoInvoicePage() {
                       onChange={(e) => updateLine(i, { quantity: Number(e.target.value) })}
                     />
                     <Input
+                      aria-label={`Line ${i + 1} unit price`}
                       type="number"
                       className="w-32"
                       placeholder="Unit price"
@@ -556,6 +695,7 @@ export default function DemoInvoicePage() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label={`Remove line ${i + 1}`}
                       disabled={!!task || lines.length === 1}
                       onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}
                     >
@@ -573,17 +713,11 @@ export default function DemoInvoicePage() {
               >
                 <Plus className="size-3.5" /> Add line
               </Button>
-            </div>
+            </fieldset>
 
             <div className="flex items-center justify-between border-t border-border pt-3">
               <span className="font-mono text-sm text-muted-foreground">
-                Total:{" "}
-                <motion.span
-                  key={amount}
-                  initial={{ opacity: 0.4 }}
-                  animate={{ opacity: 1 }}
-                  className="text-foreground"
-                >
+                Total: <motion.span key={amount} initial={{ opacity: 0.4 }} animate={{ opacity: 1 }} className="text-foreground">
                   {amount.toLocaleString()} EGP
                 </motion.span>
               </span>
@@ -617,12 +751,7 @@ export default function DemoInvoicePage() {
               <Card className="gap-4 p-5">
                 <div className="flex items-center justify-between">
                   <MonoLabel gold>[ Step 2 — runtime execution ]</MonoLabel>
-                  <motion.div
-                    key={task.status}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.2 }}
-                  >
+                  <motion.div key={task.status} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }}>
                     <Badge variant="outline" className={taskToneBadge(task.status).className}>
                       {taskToneBadge(task.status).label}
                     </Badge>
@@ -632,9 +761,11 @@ export default function DemoInvoicePage() {
               </Card>
 
               <AnimatePresence mode="wait">
-                {task.pendingApproval && (
-                  <ApprovalCard key="approval" task={task} onDecide={decide} deciding={deciding} />
-                )}
+                <ReasoningConsole key={`console-${task.id}-${task.status}`} task={task} />
+              </AnimatePresence>
+
+              <AnimatePresence mode="wait">
+                {task.pendingApproval && <ApprovalCard key="approval" task={task} onDecide={decide} deciding={deciding} />}
                 {task.result && <ResultCard key="result" task={task} />}
               </AnimatePresence>
 

@@ -1,31 +1,50 @@
 import type { Metadata, Viewport } from "next";
-import {
-  Space_Grotesk,
-  IBM_Plex_Mono,
-  IBM_Plex_Sans_Arabic,
-} from "next/font/google";
+import localFont from "next/font/local";
 import { Toaster } from "sonner";
 import "./globals.css";
 
-const display = Space_Grotesk({
-  subsets: ["latin"],
+/**
+ * Self-hosted fonts via @fontsource (actual .woff2 files vendored into
+ * node_modules by npm), NOT next/font/google. This sandbox has no route to
+ * fonts.googleapis.com / fonts.gstatic.com (only a small domain allowlist,
+ * which does include the npm registry) — next/font/google would silently
+ * fail to download at build time and Next would fall back to a generic
+ * system sans-serif for the whole app, which is most of why the UI reads as
+ * "cheap"/ungrounded no matter what else is styled well. next/font/local
+ * needs no network at request time at all, so this works identically in
+ * this sandbox and in a normal deployment with full internet access.
+ */
+const display = localFont({
+  src: [
+    { path: "../../node_modules/@fontsource/space-grotesk/files/space-grotesk-latin-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "../../node_modules/@fontsource/space-grotesk/files/space-grotesk-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../../node_modules/@fontsource/space-grotesk/files/space-grotesk-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../../node_modules/@fontsource/space-grotesk/files/space-grotesk-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "../../node_modules/@fontsource/space-grotesk/files/space-grotesk-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-display",
   display: "swap",
 });
 
-const monoData = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
+const monoData = localFont({
+  src: [
+    { path: "../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2", weight: "500", style: "normal" },
+  ],
   variable: "--font-mono-data",
   display: "swap",
 });
 
-const arabic = IBM_Plex_Sans_Arabic({
-  subsets: ["arabic"],
-  weight: ["400", "600"],
+const arabic = localFont({
+  src: [
+    { path: "../../node_modules/@fontsource/ibm-plex-sans-arabic/files/ibm-plex-sans-arabic-arabic-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../../node_modules/@fontsource/ibm-plex-sans-arabic/files/ibm-plex-sans-arabic-arabic-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "../../node_modules/@fontsource/ibm-plex-sans-arabic/files/ibm-plex-sans-arabic-arabic-700-normal.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-arabic",
   display: "swap",
 });
+
 
 /** Canonical site origin — set NEXT_PUBLIC_SITE_URL in production. */
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "http://localhost:3000";
