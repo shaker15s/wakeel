@@ -165,9 +165,14 @@ and API, both decoupled from the real authenticated app and from Prisma
    escalated to manual review (correct, safe default) rather than
    automatically confirmed — but automatic confirmation requires real,
    verified Odoo field semantics this session could not establish.
-3. **No HTTP/API surface yet.** Everything in this milestone is
-   library-level and only exercised by its own tests; nothing has been
-   wired into a request handler, so there is no live, end-to-end path yet.
+3. **No HTTP/API surface for the real, authenticated app yet.** A demo-only,
+   no-login HTTP surface was added afterward (see the Addendum above:
+   `/api/demo/invoice-task*`, `/demo/invoice`) and is exercised live over
+   real HTTP — but it still runs against `FakeERPConnector` and an in-memory
+   store behind a throwaway browser-generated tenant id, not the real
+   `src/lib/auth.ts` session system or a persistent store. The underlying
+   gap this point originally flagged — no authenticated, persisted,
+   production request path — is unchanged.
 4. **Per-task idempotency key derivation (`task:{taskId}:execute_write`) ties
    dedup scope to a single task.** This is correct for "don't double-execute
    this task's write," but does not protect against a *user* submitting the
