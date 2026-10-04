@@ -47,6 +47,15 @@ export async function getDemoTask(tenantId: string, taskId: string): Promise<{ t
   return asJson(res);
 }
 
+export async function cancelDemoTask(tenantId: string, taskId: string, reason?: string): Promise<{ task: TaskView }> {
+  const res = await fetch(`/api/demo/invoice-task/${taskId}/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", [DEMO_TENANT_HEADER]: tenantId },
+    body: JSON.stringify({ reason }),
+  });
+  return asJson(res);
+}
+
 export async function decideDemoApproval(
   tenantId: string,
   taskId: string,

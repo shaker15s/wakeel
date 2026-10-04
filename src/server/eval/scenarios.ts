@@ -1,4 +1,4 @@
-import { advance, createCreateDraftInvoiceTask, ExecutorDeps } from '@/server/runtime/executor';
+import { advance, cancelTask, createCreateDraftInvoiceTask, ExecutorDeps } from '@/server/runtime/executor';
 import { InMemoryTaskStore } from '@/server/runtime/memory-store';
 import { FakeERPConnector } from '@/server/erp/fake-connector';
 import { PolicyEngine } from '@/server/policy/engine';
@@ -43,7 +43,8 @@ export type ScenarioCategory =
   | 'verification_read_failed'
   | 'cross_tenant_access_denied'
   | 'action_tampering_blocked'
-  | 'idempotency_key_collision';
+  | 'idempotency_key_collision'
+  | 'cancellation';
 
 export interface ScenarioResult {
   id: string;
@@ -539,5 +540,32 @@ export function buildScenarios(): ScenarioDescriptor[] {
           };
         },
       ),
+
+    define(
+      'cancellation-01',
+      'cancellation',
+      'A human can cancel a task before any write occurs; the task becomes terminal and the connector is never called.',
+      async () => {
+        const deps = freshDeps();
+        const connector = deps.connector as FakeERPConnector;
+        const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
+        await advance(deps, TENANT_A, task.id); // now waiting_for_approval
+        const t = await cancelTask(deps, TENANT_A, task.id, ACTOR, 'eval: cancelling before approval');
+        const events = await deps.store.listEvents(task.id);
+        const passed =
+          t.status === 'cancelled' &&
+          (t.result?.unresolvedIssues ?? []).includes('cancelled_by_actor') &&
+          connector.getCreatedInvoices().length === 0;
+        return {
+          passed,
+          failureReason: passed ? undefined : `expected cancelled/cancelled_by_actor with 0 writes, got ${t.status}`,
+          finalStatus: t.status,
+          outcome: t.result?.outcome,
+          connectorWriteCount: connector.getCreatedInvoices().length,
+          eventCount: events.length,
+          receiptComplete: receiptComplete(t, events.length),
+        };
+      },
+    ),
   ];
 }

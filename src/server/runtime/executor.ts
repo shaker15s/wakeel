@@ -123,6 +123,70 @@ async function succeed(deps: ExecutorDeps, tenantId: string, taskId: string, sum
 }
 
 /**
+ * Cancels a task on explicit human request. Safe by construction:
+ *  - a no-op (returns the task unchanged) if it is already in a terminal
+ *    state — including an already-cancelled task, so double-cancellation
+ *    cannot append duplicate events or raise;
+ *  - REFUSED once `execute_write` has already succeeded. Once the external
+ *    side effect has actually happened, "cancel" is no longer a safe
+ *    no-consequence action — undoing it would need a real compensating
+ *    action (e.g. void/delete the created invoice), which this workflow
+ *    does not implement. Silently marking the task `cancelled` at that
+ *    point would misreport a real outcome as if nothing happened.
+ * Tenant-scoped like every other store operation: a task invisible to
+ * `tenantId` here throws, same as `advance()`.
+ */
+export async function cancelTask(
+  deps: ExecutorDeps,
+  tenantId: string,
+  taskId: string,
+  actorId: string,
+  reason?: string,
+): Promise<Task> {
+  const task = await deps.store.getTask(tenantId, taskId);
+  if (!task) throw new Error(`Task ${taskId} not found for tenant ${tenantId}`);
+  if (TERMINAL_TASK_STATUSES.has(task.status)) return task;
+
+  const steps = await deps.store.listSteps(taskId);
+  const executeStep = steps.find((s) => s.name === 'execute_write');
+  if (executeStep?.status === 'succeeded') {
+    throw new Error(
+      'Cannot cancel: the write already completed. This requires a compensating action (e.g. voiding the invoice), not a cancellation.',
+    );
+  }
+
+  // A pending approval left dangling on a cancelled (terminal) task is a
+  // stale, confusing state — e.g. a UI would keep showing an "approve this"
+  // card for a task that is already over. Resolve it as part of the same
+  // cancellation, not as an afterthought the caller has to remember.
+  const approvalStep = steps.find((s) => s.name === 'await_approval');
+  const approvalId = (approvalStep?.output as { approvalId?: string } | undefined)?.approvalId;
+  if (approvalId) {
+    const approval = await deps.store.getApproval(tenantId, approvalId);
+    if (approval?.status === 'pending') {
+      await deps.store.decideApproval(tenantId, approvalId, 'rejected', actorId, 'Task was cancelled before a decision was made.');
+    }
+  }
+
+  await deps.store.appendEvent({
+    taskId,
+    type: 'task_status_changed',
+    actorType: 'human',
+    actorId,
+    payload: { status: 'cancelled', reason: reason ?? null },
+  });
+
+  return deps.store.updateTask(tenantId, taskId, {
+    status: 'cancelled',
+    result: {
+      outcome: 'cancelled',
+      summary: reason ? `Cancelled: ${reason}` : 'Cancelled by request before any write occurred.',
+      unresolvedIssues: ['cancelled_by_actor'],
+    },
+  });
+}
+
+/**
  * Resumable orchestrator tick. Safe to call repeatedly (including after a
  * crash/restart): it re-reads persisted task/step state every time and never
  * re-executes a step already marked `succeeded`, never re-decides an

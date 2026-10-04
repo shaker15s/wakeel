@@ -4,6 +4,7 @@ import { useId, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
+  Ban,
   CheckCircle2,
   ChevronDown,
   FlaskConical,
@@ -36,6 +37,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
+  cancelDemoTask,
   createDemoTask,
   decideDemoApproval,
   type DemoInvoiceLine,
@@ -96,6 +98,8 @@ function taskToneBadge(status: string): { label: string; className: string } {
       return { label: "Waiting for approval", className: "bg-gold/15 text-gold border-gold/40" };
     case "expired":
       return { label: "Expired", className: "bg-destructive/15 text-destructive border-destructive/40" };
+    case "cancelled":
+      return { label: "Cancelled", className: "bg-secondary text-muted-foreground border-border" };
     default:
       return { label: status, className: "bg-secondary text-secondary-foreground border-border" };
   }
@@ -105,6 +109,9 @@ function orbStateForTask(task: TaskView | null): AgentOrbState {
   if (!task) return "idle";
   if (task.result?.outcome === "failed") return "error";
   if (task.result?.outcome === "succeeded" || task.result?.outcome === "partially_succeeded") return "success";
+  // A deliberate cancellation is not a failure — the orb should calm down,
+  // not flash red as if something went wrong.
+  if (task.result?.outcome === "cancelled") return "idle";
   if (task.status === "waiting_for_approval") return "waiting";
   return "thinking";
 }
@@ -431,7 +438,9 @@ function ResultCard({ task }: { task: TaskView }) {
       ? { icon: CheckCircle2, className: "border-live/40 bg-live/5 text-live" }
       : task.result.outcome === "partially_succeeded"
         ? { icon: AlertTriangle, className: "border-gold/40 bg-gold/5 text-gold" }
-        : { icon: XCircle, className: "border-destructive/40 bg-destructive/5 text-destructive" };
+        : task.result.outcome === "cancelled"
+          ? { icon: Ban, className: "border-border bg-secondary/40 text-muted-foreground" }
+          : { icon: XCircle, className: "border-destructive/40 bg-destructive/5 text-destructive" };
   const Icon = tone.icon;
   const isSuccess = task.result.outcome === "succeeded";
   const isFailure = task.result.outcome === "failed";
@@ -535,6 +544,7 @@ export default function DemoInvoicePage() {
   const [task, setTask] = useState<TaskView | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deciding, setDeciding] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const customerIdFieldId = useId();
   const memoFieldId = useId();
 
@@ -578,9 +588,30 @@ export default function DemoInvoicePage() {
     }
   }
 
+  async function cancel() {
+    if (!task) return;
+    setCancelling(true);
+    try {
+      const { task: updated } = await cancelDemoTask(tenantId, task.id, "Cancelled from the demo console");
+      setTask(updated);
+      toast(updated.result?.summary ?? "Task cancelled.");
+    } catch (err) {
+      // The server correctly refuses to cancel once the write already
+      // happened (409) — surface that distinction instead of a generic error.
+      toast.error(err instanceof Error ? err.message : "Could not cancel this task.");
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   function reset() {
     setTask(null);
   }
+
+  // Mirrors TERMINAL_TASK_STATUSES from the runtime (src/server/runtime/types.ts)
+  // as a plain client-side list, rather than importing server-side code into
+  // the client bundle just for one constant.
+  const isTerminal = task ? (["succeeded", "partially_succeeded", "failed", "cancelled", "expired"] as string[]).includes(task.status) : true;
 
   return (
     <main className="relative min-h-screen bg-background px-4 py-10 text-foreground sm:px-8">
@@ -729,11 +760,21 @@ export default function DemoInvoicePage() {
                   </Button>
                 </motion.div>
               ) : (
-                <motion.div whileTap={{ scale: 0.97 }}>
-                  <Button variant="outline" onClick={reset}>
-                    Start another request
-                  </Button>
-                </motion.div>
+                <div className="flex gap-2">
+                  {!isTerminal && (
+                    <motion.div whileTap={{ scale: 0.97 }}>
+                      <Button variant="outline" onClick={cancel} disabled={cancelling} className="gap-1.5 text-muted-foreground">
+                        {cancelling ? <Loader2 className="size-4 animate-spin" /> : <Ban className="size-4" />}
+                        Cancel
+                      </Button>
+                    </motion.div>
+                  )}
+                  <motion.div whileTap={{ scale: 0.97 }}>
+                    <Button variant="outline" onClick={reset}>
+                      Start another request
+                    </Button>
+                  </motion.div>
+                </div>
               )}
             </div>
           </Card>

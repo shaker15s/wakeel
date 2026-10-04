@@ -8,6 +8,8 @@ import {
   TaskStore,
   TenantIsolationError,
 } from './types';
+import { redact } from './redact';
+
 
 /**
  * In-memory TaskStore. This is the only TaskStore implementation exercised
@@ -89,6 +91,9 @@ export class InMemoryTaskStore implements TaskStore {
     const list = this.events.get(event.taskId) ?? [];
     const full: TaskEvent = {
       ...event,
+      // Redacted here, at the actual persistence boundary — not left to
+      // every call site in executor.ts to remember. See redact.ts.
+      payload: redact(event.payload),
       id: randomUUID(),
       sequence: list.length + 1,
       createdAt: new Date(),
