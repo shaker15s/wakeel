@@ -41,5 +41,4 @@ export function getDemoExecutorDeps(): ExecutorDeps {
   };
 }
 
-export const DEMO_TENANT_COOKIE = 'wakeel_demo_tenant';
 export const DEMO_ACTOR_ID = 'demo-operator';

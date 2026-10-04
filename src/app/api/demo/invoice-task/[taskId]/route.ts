@@ -13,7 +13,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   return handleRoute(async () => {
     const { taskId } = await params;
     const tenantId = readDemoTenantId(req);
-    if (!tenantId) return jsonError(404, 'No demo session found for this browser.');
+    if (!tenantId) return jsonError(400, 'Missing or invalid demo tenant id — send an x-demo-tenant-id header.');
 
     const deps = getDemoExecutorDeps();
     const view = await buildTaskView(deps.store, tenantId, taskId);
@@ -50,7 +50,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   return handleRoute(async () => {
     const { taskId } = await params;
     const tenantId = readDemoTenantId(req);
-    if (!tenantId) return jsonError(404, 'No demo session found for this browser.');
+    if (!tenantId) return jsonError(400, 'Missing or invalid demo tenant id — send an x-demo-tenant-id header.');
 
     const body: unknown = await req.json().catch(() => null);
     const parsed = decideSchema.safeParse(body);
@@ -68,8 +68,8 @@ export async function POST(req: Request, { params }: RouteParams) {
     if (!approvalId) return jsonError(409, 'This task has no pending approval to decide.');
 
     // Human-decision-only entrypoint — this is the actual approval gate.
-    // "decidedBy" here is the demo browser's anonymous tenant id, standing
-    // in for a real human operator identity.
+    // "decidedBy" here is the demo browser's self-generated tenant id,
+    // standing in for a real human operator identity.
     await deps.store.decideApproval(tenantId, approvalId, parsed.data.decision, tenantId, parsed.data.reason);
 
     if (parsed.data.decision === 'approved' && parsed.data.faultInjection && parsed.data.faultInjection !== 'none') {

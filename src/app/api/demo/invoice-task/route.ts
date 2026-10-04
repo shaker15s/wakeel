@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { handleRoute, jsonError } from '@/lib/wakeel/http';
 import { advance, createCreateDraftInvoiceTask } from '@/server/runtime/executor';
 import { DEMO_ACTOR_ID, getDemoExecutorDeps } from '@/server/runtime/demo-store';
-import { ensureDemoTenantCookie } from '@/server/runtime/demo-tenant';
+import { readDemoTenantId } from '@/server/runtime/demo-tenant';
 import { buildTaskView } from '@/server/runtime/demo-view';
 
 /**
@@ -11,6 +11,9 @@ import { buildTaskView } from '@/server/runtime/demo-view';
  * (see src/server/runtime/demo-store.ts for why this exists separately
  * from the real authenticated app). Never add real ERP credentials or
  * production data here — this always runs against FakeERPConnector.
+ *
+ * Tenant identity comes from the `x-demo-tenant-id` request header, not a
+ * cookie — see src/server/runtime/demo-tenant.ts for why.
  */
 
 const createTaskSchema = z.object({
@@ -30,6 +33,9 @@ const createTaskSchema = z.object({
 
 export async function POST(req: Request) {
   return handleRoute(async () => {
+    const tenantId = readDemoTenantId(req);
+    if (!tenantId) return jsonError(400, `Missing or invalid demo tenant id — send an x-demo-tenant-id header.`);
+
     const body: unknown = await req.json().catch(() => null);
     const parsed = createTaskSchema.safeParse(body);
     if (!parsed.success) {
@@ -37,10 +43,6 @@ export async function POST(req: Request) {
     }
 
     const deps = getDemoExecutorDeps();
-    const cookieCarrier = NextResponse.json({});
-    const tenantId = ensureDemoTenantCookie(req, cookieCarrier);
-    const setCookie = cookieCarrier.headers.get('set-cookie');
-
     const task = await createCreateDraftInvoiceTask(deps, {
       tenantId,
       actorId: DEMO_ACTOR_ID,
@@ -49,8 +51,6 @@ export async function POST(req: Request) {
     await advance(deps, tenantId, task.id);
 
     const view = await buildTaskView(deps.store, tenantId, task.id);
-    const response = NextResponse.json({ tenantId, task: view }, { status: 201 });
-    if (setCookie) response.headers.set('set-cookie', setCookie);
-    return response;
+    return NextResponse.json({ tenantId, task: view }, { status: 201 });
   });
 }
