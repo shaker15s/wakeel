@@ -8,7 +8,7 @@ import { db } from '@/lib/db';
 const executeApprovalSchema = z.object({
   userId: z.string().min(1),
   toolName: z.string().min(1),
-  parameters: z.record(z.any()),
+  parameters: z.record(z.string(), z.any()),
   confirmed: z.boolean(),
 });
 

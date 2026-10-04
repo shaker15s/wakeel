@@ -36,6 +36,22 @@ yarn-error.log*
 # vercel
 .vercel
 
+# This repo's committed lockfile is bun.lock (bun is the project's intended
+# package manager). This sandbox only has npm/node available, so some
+# sessions use npm to install dependencies locally — don't let that produce
+# a second, conflicting lockfile in git. See docs/implementation/00-repo-audit.md §6.2.
+/package-lock.json
+
+# local sqlite database — never commit live data/credentials, see
+# docs/implementation/00-repo-audit.md §5.5. `bun run db:push` / `prisma db
+# push` recreates the schema; seed scripts (if any) recreate sample data.
+/db/*.db
+/db/*.db-journal
+
+# scratch QA/tool-run artifacts from prior coding-agent sessions — not source.
+/tool-results/
+/download/
+
 
 # typescript
 *.tsbuildinfo

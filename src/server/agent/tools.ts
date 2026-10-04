@@ -1,4 +1,4 @@
-import { IERPConnector } from '../erp/contract';
+import { ExecutionResult, IERPConnector } from '../erp/contract';
 import { ActionRequest, PolicyEngine } from '../policy/engine';
 
 export interface ToolDefinition {
@@ -58,13 +58,25 @@ export const ERP_TOOLS: ToolDefinition[] = [
   },
 ];
 
+/**
+ * Discriminated-ish result shape for executeToolCall(). Every branch carries
+ * the same keys (optional where not applicable) so callers can read
+ * `.requiresApproval` / `.data` / `.reason` without narrowing first — this
+ * used to be an implicit, inconsistent union that `tsc` could not check
+ * (see docs/implementation/00-repo-audit.md, tsc baseline section).
+ */
+export type ToolCallResult =
+  | { success: false; error: string; requiresApproval: false; data?: undefined; approvalCard?: undefined; reason?: undefined }
+  | { success: false; requiresApproval: true; approvalCard: unknown; reason?: string; data?: undefined; error?: undefined }
+  | (ExecutionResult<any> & { requiresApproval?: false; approvalCard?: undefined; reason?: undefined });
+
 export async function executeToolCall(
   connector: IERPConnector,
   toolName: string,
   parameters: Record<string, any>,
   operatorId: string,
   approvalGranted = false
-) {
+): Promise<ToolCallResult> {
   const tool = ERP_TOOLS.find((t) => t.name === toolName);
   if (!tool) {
     throw new Error(`Tool ${toolName} not found in registry.`);

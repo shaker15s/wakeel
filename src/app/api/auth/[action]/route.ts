@@ -2,6 +2,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { handleRoute, jsonError, jsonOk } from "@/lib/wakeel/http";
 import {
+  allowUnauthenticatedFallback,
   buildSessionCookie,
   buildClearSessionCookie,
   clientIp,
@@ -117,6 +118,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ action: string 
 
     const account = await getSessionAccount(req);
     if (!account) {
+      if (!allowUnauthenticatedFallback()) {
+        return jsonOk({ account: null, operators: [] });
+      }
       // In dev trial mode, bootstrap a default operator so the UI is immediately interactive
       let user = await db.user.findFirst({
         orderBy: { createdAt: "desc" },

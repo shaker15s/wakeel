@@ -1,9 +1,10 @@
 import { z } from 'zod'
 import { db } from '@/lib/db'
-import { chatText, type ChatTurn } from '@/lib/wakeel/ai'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
 import { requireOwnedOperator } from '@/lib/auth'
 import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
+import { AgentRuntime } from '@/server/agent/runtime'
+import { Odoo19Connector } from '@/server/erp/odoo-connector'
 
 const chatSchema = z.object({
   userId: z.string().trim().min(1, 'userId is required'),
@@ -52,23 +53,6 @@ export async function POST(req: Request) {
 
     const user = guard.user
 
-    // Build live workspace context: systems + last 8 activities.
-    const systems = await db.aiSystem.findMany({
-      where: { userId },
-      orderBy: { updatedAt: 'desc' },
-      take: 12,
-      select: {
-        name: true,
-        category: true,
-        status: true,
-        _count: { select: { records: true } },
-      },
-    })
-    const activities = await db.activity.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: 8,
-    })
     // Last 10 messages (ascending) become the conversation so far.
     const history = await db.chatMessage.findMany({
       where: { userId },
@@ -77,26 +61,16 @@ export async function POST(req: Request) {
     })
     history.reverse()
 
-    const systemsBlock =
-      systems.length > 0
-        ? systems
-            .map((s) => `- ${s.name} (${s.category}, ${s.status.toLowerCase()}, ${s._count.records} records)`)
-            .join('\n')
-        : '(no systems yet — the workspace is empty)'
-    const activityBlock =
-      activities.length > 0
-        ? activities.map((a) => `- [${a.type}] ${a.title}`).join('\n')
-        : '(no recent activity)'
+    // NOTE (milestone-0 fix, 2026-10-04): this route previously failed to parse —
+    // a partial edit had pasted the ERP-connector-loading block below *inside* the
+    // array literal for an old, now-superseded inline system-prompt string. That
+    // dead inline prompt (and the systems/activity "grounding" text it built) has
+    // been removed rather than guessed back into existence; AgentRuntime.run()
+    // builds its own system prompt today and does not yet receive the operator's
+    // full systems/activity list. Restoring richer workspace grounding inside
+    // AgentRuntime is a real, tracked gap — see docs/implementation/00-repo-audit.md
+    // — not a silent regression introduced by this fix.
 
-    const systemPrompt = [
-      `You are Wakeel (وكيل), a dedicated AI employee working for ${user.name} in workspace ${user.workspace}. You are professional, proactive, warm, slightly formal, obsessed with operations. You refer to the user's actual systems by name. Keep replies under 120 words. If asked to do something you cannot do with current tools, say exactly what you would need and suggest which system handles it.`,
-      `GROUNDING RULE: answer from the LIVE WORKSPACE CONTEXT below whenever it is relevant. If the context does not contain the answer, say plainly that you don't have that information yet and suggest a concrete next step (run a discovery, forge a system, open a record). Never invent system names, numbers or records that are not in the context.`,
-      `LANGUAGE RULE (hard requirement, violating it is a defect): reply in the SAME language AND script as the operator's latest message. Arabic message → natural Modern Standard Arabic (system/product names may stay in Latin script). English message → English. If the message is ambiguous or mixed, fall back to the SESSION LANGUAGE: ${sessionLang.toUpperCase()}. NEVER reply in a different script than the operator's message.`,
-      '',
-      '--- LIVE WORKSPACE CONTEXT ---',
-      `Systems you manage for ${user.name}:`,
-      systemsBlock,
-      '',
     // Load active Odoo connection if available
     const erpSystem = await db.aiSystem.findFirst({
       where: { userId: guard.user.id, category: 'ERP', status: 'ACTIVE' },
