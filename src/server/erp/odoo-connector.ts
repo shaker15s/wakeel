@@ -386,7 +386,15 @@ export class Odoo19Connector implements IERPConnector {
     }
   }
 
-  async createDraftInvoice(payload: { customerId: string | number; lines: Array<{ productId?: string | number; description: string; quantity: number; unitPrice: number }> }): Promise<ExecutionResult<{ invoiceId: string | number; invoiceNumber?: string; state: 'draft' }>> {
+  async createDraftInvoice(
+    payload: { customerId: string | number; lines: Array<{ productId?: string | number; description: string; quantity: number; unitPrice: number }> },
+    idempotencyKey?: string,
+  ): Promise<ExecutionResult<{ invoiceId: string | number; invoiceNumber?: string; state: 'draft' }>> {
+    // NOTE: idempotencyKey is accepted (interface compliance) but not yet used
+    // to tag/search Odoo records — see docs/implementation/03-milestone-1-report.md.
+    // The runtime's IdempotencyRecord store still prevents WAKIL from calling
+    // this twice for the same key; what's missing here is reconciliation if a
+    // call succeeds in Odoo but the process crashes before recording that.
     const start = Date.now();
     try {
       const invoiceLines = payload.lines.map((l) => [

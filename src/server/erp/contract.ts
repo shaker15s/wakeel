@@ -91,6 +91,30 @@ export interface IERPConnector {
   getInventoryLevels(params?: { lowStockThreshold?: number }): Promise<ExecutionResult<{ totalItems: number; lowStockItems: any[] }>>;
 
   // Canonical Safe Mutation APIs (Creates draft states only, verified before execution)
-  createDraftInvoice(payload: { customerId: string | number; lines: Array<{ productId?: string | number; description: string; quantity: number; unitPrice: number }> }): Promise<ExecutionResult<{ invoiceId: string | number; invoiceNumber?: string; state: 'draft' }>>;
+  //
+  // `idempotencyKey`, when supplied, is a hint the connector MAY use for
+  // connector-native dedupe/tagging. It is optional and additive — existing
+  // callers that omit it keep working unchanged. Today only
+  // FakeERPConnector (src/server/erp/fake-connector.ts) actually uses it to
+  // demonstrate connector-level idempotency; Odoo19Connector does not yet
+  // tag/search by it (tracked gap, see docs/implementation/03-milestone-1-report.md).
+  createDraftInvoice(
+    payload: { customerId: string | number; lines: Array<{ productId?: string | number; description: string; quantity: number; unitPrice: number }> },
+    idempotencyKey?: string,
+  ): Promise<ExecutionResult<{ invoiceId: string | number; invoiceNumber?: string; state: 'draft' }>>;
   createDraftPurchaseOrder(payload: { vendorId: string | number; lines: Array<{ description: string; quantity: number; unitPrice: number }> }): Promise<ExecutionResult<{ orderId: string | number; state: 'draft' }>>;
+
+  /**
+   * OPTIONAL capability: look up a previously created record by the
+   * idempotency key it was tagged with, for crash-recovery reconciliation
+   * (PRD §9: "use connector-supported idempotency or read-after-write
+   * reconciliation where possible"). A connector that does not implement
+   * this simply omits the method — the runtime treats its absence as "this
+   * connector cannot reconcile an ambiguous outcome" and routes the task to
+   * human review instead of guessing. Never assume a connector supports this.
+   */
+  findByIdempotencyKey?(
+    entityId: string,
+    idempotencyKey: string,
+  ): Promise<ExecutionResult<any | null>>;
 }
