@@ -25,6 +25,17 @@ const securityHeaders = [
   },
   { key: "X-DNS-Prefetch-Control", value: "off" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  /**
+   * TEMPORARY, sandbox-only: force every response to be fully non-cacheable
+   * (not just "revalidate before use", which is what Next's own default
+   * "no-cache, must-revalidate" means and is NOT the same thing). While
+   * iterating on this page live, any intermediate cache — the browser's own
+   * disk cache, or a caching layer in front of the sandbox's preview proxy —
+   * that serves back a stale HTML response from an earlier edit is
+   * indistinguishable from a real bug and wastes a debugging round-trip.
+   * Safe to relax once this stops actively changing.
+   */
+  { key: "Cache-Control", value: "no-store, must-revalidate" },
 ];
 
 const nextConfig: NextConfig = {
