@@ -34,9 +34,37 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  /**
+   * TEMPORARY, sandbox-only: Next.js dev mode blocks cross-origin requests
+   * to its own dev resources (HMR websocket, RSC payloads, etc.) by default.
+   * This sandbox's live preview is served from a *different* origin
+   * (https://{port}-{sandboxId}.e2b.app) than the dev server's own
+   * localhost/0.0.0.0 bind address, so without this allowlist every page
+   * silently fails to hydrate — it looks exactly like a blank/black screen,
+   * with the real reason only visible in the dev server's own terminal log
+   * ("Blocked cross-origin request ... from ...e2b.app"). Harmless in dev;
+   * this setting has no effect on a production build (`next build && next
+   * start`), so it does not need to be "removed later."
+   */
+  allowedDevOrigins: ["*.e2b.app"],
   async headers() {
     return [
       { source: "/(.*)", headers: securityHeaders },
+    ];
+  },
+  /**
+   * TEMPORARY, sandbox-only: this environment's Prisma client cannot be
+   * generated (no network access to binaries.prisma.sh — see
+   * docs/implementation/00-repo-audit.md), so the real authenticated
+   * console at "/" cannot boot (every DB-backed API route 500s). Rather
+   * than land visitors on a page that silently does nothing, send them
+   * straight to the live runtime demo, which needs neither Prisma nor a
+   * real Odoo instance. Remove this redirect once a working database is
+   * available (e.g. outside this sandbox) and the real console can boot.
+   */
+  async redirects() {
+    return [
+      { source: "/", destination: "/demo/invoice", permanent: false },
     ];
   },
 };
