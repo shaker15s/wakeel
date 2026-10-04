@@ -7,6 +7,7 @@ export function jsonOk<T>(data: T, status = 200): NextResponse {
 }
 
 export function jsonError(status: number, message: string): NextResponse {
+  if (status >= 400) console.warn(`[wakeel/api] ${status}:`, message)
   return NextResponse.json({ error: message }, { status })
 }
 
