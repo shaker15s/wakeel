@@ -31,8 +31,28 @@ export interface PolicyDecision {
   };
 }
 
+const REGISTERED_TOOL_CATEGORIES: Readonly<Record<string, ActionRequest['category']>> = {
+  get_sales_summary: 'READ',
+  get_receivables_summary: 'READ',
+  get_inventory_levels: 'READ',
+  search_customers: 'READ',
+  create_draft_invoice: 'DRAFT_WRITE',
+  // Preserved for the existing, separately approval-gated runtime workflow.
+  create_draft_purchase_order: 'DRAFT_WRITE',
+};
+
 export class PolicyEngine {
   static evaluate(action: ActionRequest): PolicyDecision {
+    const registeredCategory = REGISTERED_TOOL_CATEGORIES[action.toolName];
+    if (!registeredCategory || registeredCategory !== action.category) {
+      return {
+        allowed: false,
+        requiresApproval: false,
+        riskLevel: 'HIGH',
+        reason: 'Unknown tool or risk category mismatch; policy denies by default.',
+      };
+    }
+
     // 1. Destructive actions blocked in MVP
     if (action.category === 'DESTRUCTIVE') {
       return {
