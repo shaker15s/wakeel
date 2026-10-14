@@ -129,12 +129,12 @@ export class FakeERPConnector implements IERPConnector {
     return { success: true, data: null, durationMs: Date.now() - start, auditId: `fake-${Date.now()}` };
   }
 
-  async getSalesSummary(): Promise<ExecutionResult<{ totalRevenue: number; orderCount: number; currency: string; orders: any[] }>> {
-    return { success: true, data: { totalRevenue: 0, orderCount: 0, currency: 'EGP', orders: [] }, durationMs: 1, auditId: 'fake' };
+  async getSalesSummary(): Promise<ExecutionResult<{ totalRevenue: string; orderCount: number; currency: string | null; orders: any[] }>> {
+    return { success: true, data: { totalRevenue: '0.00', orderCount: 0, currency: null, orders: [] }, durationMs: 1, auditId: 'fake' };
   }
 
-  async getReceivablesSummary(): Promise<ExecutionResult<{ totalOutstanding: number; overdueCount: number; currency: string; debtors: any[] }>> {
-    return { success: true, data: { totalOutstanding: 0, overdueCount: 0, currency: 'EGP', debtors: [] }, durationMs: 1, auditId: 'fake' };
+  async getReceivablesSummary(): Promise<ExecutionResult<{ totalOutstanding: string; overdueCount: number; currency: string | null; debtors: any[] }>> {
+    return { success: true, data: { totalOutstanding: '0.00', overdueCount: 0, currency: null, debtors: [] }, durationMs: 1, auditId: 'fake' };
   }
 
   async getInventoryLevels(): Promise<ExecutionResult<{ totalItems: number; lowStockItems: any[] }>> {

@@ -5,6 +5,8 @@ import {
   ExecutionResult,
   IERPConnector,
 } from './contract';
+import { toOdooMoveType } from '../accounting/types';
+import { createMoney, currencyScale, MoneyMath } from '../accounting/money';
 
 export interface OdooConfig {
   url: string;
@@ -12,6 +14,28 @@ export interface OdooConfig {
   username: string;
   apiKeyOrPassword: string;
   operatorId: string;
+}
+
+function currencyCode(record: any): string {
+  const label = Array.isArray(record?.currency_id) ? String(record.currency_id[1] ?? '') : '';
+  const code = label.match(/\b[A-Z]{3}\b/)?.[0];
+  if (!code) throw new Error('Odoo currency code is unavailable; refusing to combine financial values.');
+  return code;
+}
+
+function sumOdooAmounts(records: any[], field: string): { amount: string; currency: string | null; records: any[] } {
+  if (records.length === 0) return { amount: '0', currency: null, records: [] };
+  const currency = currencyCode(records[0]);
+  const scale = currencyScale(currency);
+  let total = createMoney('0', currency, scale);
+  const normalized = records.map((record) => {
+    const rowCurrency = currencyCode(record);
+    if (rowCurrency !== currency) throw new Error('Mixed currencies cannot be added into one accounting total.');
+    const amount = createMoney(String(record[field]), currency, scale);
+    total = MoneyMath.add(total, amount);
+    return { ...record, [field]: amount.amount, currencyCode: rowCurrency };
+  });
+  return { amount: total.amount, currency, records: normalized };
 }
 
 /**
@@ -284,7 +308,7 @@ export class Odoo19Connector implements IERPConnector {
     };
   }
 
-  async getSalesSummary(params: { dateFrom?: string; dateTo?: string }): Promise<ExecutionResult<{ totalRevenue: number; orderCount: number; currency: string; orders: any[] }>> {
+  async getSalesSummary(params: { dateFrom?: string; dateTo?: string }): Promise<ExecutionResult<{ totalRevenue: string; orderCount: number; currency: string | null; orders: any[] }>> {
     const start = Date.now();
     try {
       const domain: any[] = [['state', 'in', ['sale', 'done']]];
@@ -296,15 +320,15 @@ export class Odoo19Connector implements IERPConnector {
         limit: 50,
       });
 
-      const totalRevenue = orders.reduce((sum: number, o: any) => sum + (Number(o.amount_total) || 0), 0);
+      const aggregate = sumOdooAmounts(orders, 'amount_total');
 
       return {
         success: true,
         data: {
-          totalRevenue,
+          totalRevenue: aggregate.amount,
           orderCount: orders.length,
-          currency: orders[0]?.currency_id?.[1] || 'EGP',
-          orders,
+          currency: aggregate.currency,
+          orders: aggregate.records,
         },
         durationMs: Date.now() - start,
         auditId: `odoo-sales-${Date.now()}`,
@@ -319,7 +343,7 @@ export class Odoo19Connector implements IERPConnector {
     }
   }
 
-  async getReceivablesSummary(): Promise<ExecutionResult<{ totalOutstanding: number; overdueCount: number; currency: string; debtors: any[] }>> {
+  async getReceivablesSummary(): Promise<ExecutionResult<{ totalOutstanding: string; overdueCount: number; currency: string | null; debtors: any[] }>> {
     const start = Date.now();
     try {
       const domain = [
@@ -333,15 +357,15 @@ export class Odoo19Connector implements IERPConnector {
         limit: 50,
       });
 
-      const totalOutstanding = invoices.reduce((sum: number, inv: any) => sum + (Number(inv.amount_residual) || 0), 0);
+      const aggregate = sumOdooAmounts(invoices, 'amount_residual');
 
       return {
         success: true,
         data: {
-          totalOutstanding,
+          totalOutstanding: aggregate.amount,
           overdueCount: invoices.length,
-          currency: invoices[0]?.currency_id?.[1] || 'EGP',
-          debtors: invoices,
+          currency: aggregate.currency,
+          debtors: aggregate.records,
         },
         durationMs: Date.now() - start,
         auditId: `odoo-receivables-${Date.now()}`,
@@ -409,7 +433,7 @@ export class Odoo19Connector implements IERPConnector {
       ]);
 
       const invoiceVals = {
-        move_type: 'out_invoice',
+        move_type: toOdooMoveType({ documentKind: 'customer_invoice', partnerRole: 'customer' }),
         partner_id: Number(payload.customerId),
         invoice_line_ids: invoiceLines,
       };

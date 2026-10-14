@@ -180,12 +180,12 @@ If a target ERP/API or company accounting policy cannot be established from safe
 - Produces: `Money = { amount: string; currency: string; scale: number }`; `MoneyMath.add(a: Money, b: Money): Money`, `subtract(a: Money, b: Money): Money`, `multiply(a: Money, quantity: string, resultScale: number): Money`, `compare(a: Money, b: Money): -1 | 0 | 1`; and canonical accounting entities with explicit `documentKind: 'customer_invoice' | 'vendor_bill'`.
 - Connector outputs return decimal strings (not JS `number`) for financial amounts. Odoo payload mapping is explicit and covered by fake HTTP requests.
 
-- [ ] **Step 1: Write decimal tests.** Assert `0.1 + 0.2 = 0.3`, line quantity multiplication, exact debit/credit equality, rounding at configured currency scale, and refusal for invalid/unknown currency scale.
-- [ ] **Step 2: Write semantic mapping tests.** Assert customer invoice maps to `out_invoice`, vendor bill maps to `in_invoice`, and a missing partner role or move type is review-required.
-- [ ] **Step 3: Run tests to establish failure on existing floating-point/customer-only paths.**
-- [ ] **Step 4: Implement decimal string arithmetic and domain types.** Use integer coefficients with `BigInt` and explicit scale; do not add a dependency unless the tests demonstrate the implementation would be unsafe or unmaintainable.
-- [ ] **Step 5: Update fake and Odoo connector boundaries and run relevant runtime/ERP tests.** Preserve the legacy customer invoice contract until an explicit compatibility adapter/test proves callers are migrated.
-- [ ] **Step 6: Commit money and document contracts.** Run `git add src/server/accounting/money.ts src/server/accounting/types.ts src/server/erp/contract.ts src/server/erp/fake-connector.ts src/server/erp/odoo-connector.ts src/server/runtime/workflows/create-draft-invoice.ts tests/accounting/money.test.ts tests/erp/odoo-accounting-contract.test.ts`, then `git commit -m "feat: model accounting values and document kinds exactly"`.
+- [x] **Step 1: Write decimal tests.** Assert `0.1 + 0.2 = 0.3`, line quantity multiplication, exact debit/credit equality, rounding at configured currency scale, and refusal for invalid/unknown currency scale.
+- [x] **Step 2: Write semantic mapping tests.** Assert customer invoice maps to `out_invoice`, vendor bill maps to `in_invoice`, and a missing partner role or move type is review-required.
+- [x] **Step 3: Run tests to establish failure on existing floating-point/customer-only paths.**
+- [x] **Step 4: Implement decimal string arithmetic and domain types.** Use integer coefficients with `BigInt` and explicit scale; do not add a dependency unless the tests demonstrate the implementation would be unsafe or unmaintainable.
+- [x] **Step 5: Update fake and Odoo connector boundaries and run relevant runtime/ERP tests.** Preserve the legacy customer invoice contract until an explicit compatibility adapter/test proves callers are migrated.
+- [x] **Step 6: Commit money and document contracts.** Run `git add src/server/accounting/money.ts src/server/accounting/types.ts src/server/erp/contract.ts src/server/erp/fake-connector.ts src/server/erp/odoo-connector.ts src/server/runtime/workflows/create-draft-invoice.ts tests/accounting/money.test.ts tests/erp/odoo-accounting-contract.test.ts`, then `git commit -m "feat: model accounting values and document kinds exactly"`.
 
 ## Task 7: Grounded read-only accounting tools and report evidence
 

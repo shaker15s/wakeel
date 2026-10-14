@@ -86,8 +86,8 @@ export interface IERPConnector {
   // Canonical Operational Read APIs
   searchEntities(entityId: string, query: { filter?: any; limit?: number; offset?: number }): Promise<ExecutionResult<any[]>>;
   getEntityById(entityId: string, id: string | number): Promise<ExecutionResult<any>>;
-  getSalesSummary(params: { dateFrom?: string; dateTo?: string }): Promise<ExecutionResult<{ totalRevenue: number; orderCount: number; currency: string; orders: any[] }>>;
-  getReceivablesSummary(): Promise<ExecutionResult<{ totalOutstanding: number; overdueCount: number; currency: string; debtors: any[] }>>;
+  getSalesSummary(params: { dateFrom?: string; dateTo?: string }): Promise<ExecutionResult<{ totalRevenue: string; orderCount: number; currency: string | null; orders: any[] }>>;
+  getReceivablesSummary(): Promise<ExecutionResult<{ totalOutstanding: string; overdueCount: number; currency: string | null; debtors: any[] }>>;
   getInventoryLevels(params?: { lowStockThreshold?: number }): Promise<ExecutionResult<{ totalItems: number; lowStockItems: any[] }>>;
 
   // Canonical Safe Mutation APIs (Creates draft states only, verified before execution)
