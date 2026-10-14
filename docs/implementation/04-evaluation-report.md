@@ -1,7 +1,7 @@
 # WAKEEL — Agent Evaluation Report
 
 **Suite version:** `2026-10-04.1` (src/server/eval/scenarios.ts)
-**Generated:** 2026-10-04T17:30:23.368Z · Node v22.22.3
+**Generated:** 2026-10-14T18:40:30.635Z · Node v24.14.1
 **Generator:** `npm run eval:report` → `scripts/eval-report.ts`
 
 > Regenerate this file (`npm run eval:report`) any time `src/server/eval/scenarios.ts`
@@ -41,7 +41,7 @@
 | Duplicate side effects (>1 connector write in a replay/crash/retry scenario) | 0 | n=3 |
 | Review-required outcomes (partially_succeeded) | 2 | n=16 |
 | Receipt completeness (non-empty summary + evidence event when required) | 16 / 16 (100%) | n=16 |
-| Latency p50 / p95 (ms, in-process, fake connector — NOT representative of real ERP/network latency) | 0.60 / 31.00 | n=16 |
+| Latency p50 / p95 (ms, in-process, fake connector — NOT representative of real ERP/network latency) | 1.37 / 65.34 | n=16 |
 | Cost | N/A — no paid API called | n/a |
 
 **Silent wrong completion caveat:** "0 observed" means none of these 16 scenarios
@@ -53,22 +53,22 @@ assert the outcome is `partially_succeeded`, never `succeeded`).
 
 | ID | Category | Passed | Final status | Outcome | Connector writes | Events | Receipt complete | Latency (ms) | Failure reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ordinary-success-01 | ordinary_success | ✅ | succeeded | succeeded | 1 | 7 | yes | 21.30 | — |
-| missing-input-01 | missing_or_ambiguous_input | ✅ | failed | failed | 0 | 2 | yes | 0.89 | — |
-| invalid-args-01 | invalid_tool_arguments | ✅ | failed | failed | 0 | 2 | yes | 0.51 | — |
-| policy-denial-01 | policy_denial | ✅ | failed | failed | 0 | 2 | yes | 0.45 | — |
-| approval-rejected-01 | approval_rejected | ✅ | failed | failed | 0 | 4 | yes | 1.23 | — |
-| approval-expired-01 | approval_expired | ✅ | failed | failed | 0 | 4 | yes | 31.00 | — |
-| transient-recovered-01 | transient_failure_recovered | ✅ | succeeded | succeeded | 1 | 8 | yes | 1.24 | — |
-| retry-exhausted-01 | retry_budget_exhausted | ✅ | failed | failed | 0 | 7 | yes | 0.70 | — |
-| crash-after-write-01 | crash_after_side_effect | ✅ | succeeded | succeeded | 1 | 6 | yes | 0.63 | — |
-| duplicate-replay-01 | duplicate_replayed_request | ✅ | succeeded | succeeded | 1 | 8 | yes | 0.60 | — |
-| verification-mismatch-01 | verification_mismatch | ✅ | partially_succeeded | partially_succeeded | 1 | 7 | yes | 0.63 | — |
-| verification-read-failed-01 | verification_read_failed | ✅ | partially_succeeded | partially_succeeded | 1 | 7 | yes | 0.58 | — |
-| cross-tenant-01 | cross_tenant_access_denied | ✅ | waiting_for_approval | — | 0 | 2 | yes | 0.27 | — |
-| action-tampering-01 | action_tampering_blocked | ✅ | failed | failed | 0 | 4 | yes | 0.33 | — |
-| idempotency-collision-01 | idempotency_key_collision | ✅ | failed | failed | 1 | 8 | yes | 0.56 | — |
-| cancellation-01 | cancellation | ✅ | cancelled | cancelled | 0 | 3 | yes | 0.40 | — |
+| ordinary-success-01 | ordinary_success | ✅ | succeeded | succeeded | 1 | 7 | yes | 65.34 | — |
+| missing-input-01 | missing_or_ambiguous_input | ✅ | failed | failed | 0 | 2 | yes | 1.62 | — |
+| invalid-args-01 | invalid_tool_arguments | ✅ | failed | failed | 0 | 2 | yes | 1.04 | — |
+| policy-denial-01 | policy_denial | ✅ | failed | failed | 0 | 2 | yes | 0.78 | — |
+| approval-rejected-01 | approval_rejected | ✅ | failed | failed | 0 | 4 | yes | 1.63 | — |
+| approval-expired-01 | approval_expired | ✅ | failed | failed | 0 | 4 | yes | 35.77 | — |
+| transient-recovered-01 | transient_failure_recovered | ✅ | succeeded | succeeded | 1 | 8 | yes | 2.60 | — |
+| retry-exhausted-01 | retry_budget_exhausted | ✅ | failed | failed | 0 | 7 | yes | 1.57 | — |
+| crash-after-write-01 | crash_after_side_effect | ✅ | succeeded | succeeded | 1 | 6 | yes | 1.27 | — |
+| duplicate-replay-01 | duplicate_replayed_request | ✅ | succeeded | succeeded | 1 | 8 | yes | 1.37 | — |
+| verification-mismatch-01 | verification_mismatch | ✅ | partially_succeeded | partially_succeeded | 1 | 7 | yes | 1.45 | — |
+| verification-read-failed-01 | verification_read_failed | ✅ | partially_succeeded | partially_succeeded | 1 | 7 | yes | 1.13 | — |
+| cross-tenant-01 | cross_tenant_access_denied | ✅ | waiting_for_approval | — | 0 | 2 | yes | 0.71 | — |
+| action-tampering-01 | action_tampering_blocked | ✅ | failed | failed | 0 | 4 | yes | 0.90 | — |
+| idempotency-collision-01 | idempotency_key_collision | ✅ | failed | failed | 1 | 8 | yes | 1.41 | — |
+| cancellation-01 | cancellation | ✅ | cancelled | cancelled | 0 | 3 | yes | 1.04 | — |
 
 ## Result: all scenarios passed
 

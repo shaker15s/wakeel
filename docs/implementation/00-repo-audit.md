@@ -1,5 +1,47 @@
 # WAKIL — Repository Audit (Phase 0)
 
+## Live main baseline — 2026-10-14
+
+This section supersedes historical command results below. It was measured on
+`codex/wakil-accounting-agent` at `0985a0f` (the fetched `origin/main` tip)
+using Node `v24.14.1` and Bun `1.4.0` on Windows. The checkout started clean;
+there are no repository `AGENTS.md` instruction files, no tracked `db/*`
+files, no Prisma migrations, and no GitHub Actions workflow on the fetched
+branch. The repository has `bun.lock`; the project scripts run Vitest,
+TypeScript, ESLint, the deterministic evaluation report, and Next.js build.
+
+The initial `bun install --frozen-lockfile` failed because the committed lock
+omitted dependencies already declared in `package.json` (including Vitest,
+TSX, and three font packages). After recording that baseline failure, Bun
+1.4.0 regenerated the text lockfile with `bun install --lockfile-only`; the
+subsequent frozen install succeeded with 860 packages. This lock correction is
+included in the current branch.
+
+| Check | Live result before implementation |
+|---|---|
+| `bun run test` | Pass: 63 tests / 10 files |
+| `bunx tsc --noEmit -p tsconfig.json` | Fail: Prisma client had not been generated; after `bunx prisma generate`, it exposed a missing required `AiSystem.color` field in the Odoo connection route |
+| `bun run lint` | Fail: one existing `react-hooks/set-state-in-effect` error in `src/components/app/console/views/assistant-view.tsx` |
+| `bun run eval:report` | Pass: 16/16 fake-ERP scenarios, one draft-invoice workflow, no model-in-the-loop or live ERP |
+| `bun run build` | Next.js compilation and static page generation passed; package script failed afterward because `cp -r` is not a Windows command |
+
+The generated evaluation report records only deterministic fake evidence and
+must not be presented as proof of live accounting performance. No model API,
+Odoo instance, paid service, production database, or real transaction was
+called in this baseline. `bun install --frozen-lockfile` is the canonical CI
+install after the lockfile correction. CI keeps test/typecheck/build as
+blocking checks and exposes the existing lint issue as a visible,
+non-blocking step until it is fixed separately.
+
+Environment variable names found in the application source: `AUTH_SECRET`,
+`DATABASE_URL`, `WAKEEL_ALLOW_UNAUTHENTICATED_TRIAL`, `AI_BASE_URL`,
+`OPENAI_BASE_URL`, `AI_API_KEY`, `OPENAI_API_KEY`, `WAKEEL_MODEL`, and
+`NEXT_PUBLIC_SITE_URL`. Values were not read or recorded.
+
+The following audit was written on 2026-10-04 against an earlier branch and
+is retained as historical evidence; treat its state claims and commands as
+historical unless confirmed by the live table above.
+
 **Date:** 2026-10-04
 **Branch audited:** `arena/01a1076b-wakeel` @ `d088859` (single squashed commit on `main`; no prior history, no `prisma/migrations/`)
 **Auditor:** coding agent, static code reading + the checks the sandbox could actually execute (see §6). No paid model calls, no live Odoo instance, and no live HTTP traffic against a running `next dev`/`next start` server were performed — reasons are documented in §6.1.
@@ -269,3 +311,18 @@ See `docs/implementation/01-mvp-decision.md` for the workflow choice and `docs/i
 4. Add a minimal, actually-runnable test setup (pick one runner) and port the three existing policy assertions into it as real, executing tests, so "tests pass" claims going forward are verifiable.
 
 This milestone intentionally does **not** yet add durable task state, approvals, or idempotency — those depend on the MVP workflow decision in `01-mvp-decision.md` and are the subject of the next milestone.
+
+## Task 1 completion evidence — 2026-10-14
+
+After correcting the package lock and Windows-incompatible build asset copy, the current branch checks are:
+
+- `bun install --frozen-lockfile`: pass after regenerating the stale lock with Bun; 860 locked packages installed.
+- `bun run test`: 65 tests in 11 files passed (includes 2 Windows-safe standalone-copy tests).
+- `bunx prisma generate`: pass; generated Prisma Client 6.19.2 locally, without touching an application database.
+- `bunx tsc --noEmit -p tsconfig.json`: pass after adding the required `AiSystem.color` to the Odoo connection record.
+- `bun run lint`: one pre-existing error remains in `assistant-view.tsx:101` (`react-hooks/set-state-in-effect`). The new helper, test, and Odoo route pass their focused ESLint check. CI exposes full lint with `continue-on-error: true` so the known baseline is visible without hiding or blocking unrelated pull requests.
+- `bun run eval:report`: 16/16 existing fake-ERP scenarios pass; still limited to one workflow and no model/live ERP.
+- `bun run build`: pass; Next.js produces the standalone build and the new cross-platform copy script places static/public assets in the standalone tree. Next reports a local warning because `C:\Users\HP\pnpm-lock.yaml` exists outside this repository; the repository build itself passes.
+- CI workflow parsed with the temporary `yaml` parser: valid YAML, pull-request and main-push triggers, and 9 steps. The temporary parser was not added to `package.json` or committed `bun.lock`.
+
+Task 1 also adds `.github/workflows/ci.yml` with locked Bun installation, Prisma generation, tests, typecheck, visible lint, and production build. No credentials or ERP/API calls were used.

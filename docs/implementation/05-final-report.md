@@ -1,5 +1,10 @@
 # WAKIL — Final Report (this engagement)
 
+> Historical report from 2026-10-04 for branch `arena/01a1076b-wakeel`.
+> It is not a status report for current `main`; use the 2026-10-14 live
+> baseline in `00-repo-audit.md` and the current implementation plan for
+> present-day results.
+
 Branch: `arena/01a1076b-wakeel` (off `main`). All work described below is on this
 branch only; nothing has been merged or deployed anywhere.
 
