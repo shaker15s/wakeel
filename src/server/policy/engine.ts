@@ -36,6 +36,11 @@ const REGISTERED_TOOL_CATEGORIES: Readonly<Record<string, ActionRequest['categor
   get_receivables_summary: 'READ',
   get_inventory_levels: 'READ',
   search_customers: 'READ',
+  get_chart_of_accounts: 'READ',
+  get_trial_balance: 'READ',
+  get_account_activity: 'READ',
+  get_aged_balances: 'READ',
+  get_financial_statement: 'READ',
   create_draft_invoice: 'DRAFT_WRITE',
   // Preserved for the existing, separately approval-gated runtime workflow.
   create_draft_purchase_order: 'DRAFT_WRITE',

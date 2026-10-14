@@ -198,6 +198,7 @@ export class Odoo19Connector implements IERPConnector {
           canCreateDraftInvoices: !!canCreateDraftInvoices,
           canCreateDraftPurchases: true,
           canMutateFinancials: false, // Strict safety
+          canReadAccounting: false,
           rawPermissions: {},
         },
         confirmedEntities: ['customer', 'sale_order', 'invoice', 'product'],
@@ -216,6 +217,7 @@ export class Odoo19Connector implements IERPConnector {
           canCreateDraftInvoices: false,
           canCreateDraftPurchases: false,
           canMutateFinancials: false,
+          canReadAccounting: false,
           rawPermissions: {},
         },
         confirmedEntities: [],
@@ -408,6 +410,16 @@ export class Odoo19Connector implements IERPConnector {
         auditId: `odoo-${Date.now()}`,
       };
     }
+  }
+
+  async getChartOfAccounts(): Promise<ExecutionResult<any>> { return this.accountingUnavailable(); }
+  async getTrialBalance(_params: { dateFrom?: string; dateTo: string; currency: string }): Promise<ExecutionResult<any>> { return this.accountingUnavailable(); }
+  async getAccountActivity(_params: { accountId: string; dateFrom: string; dateTo: string; currency: string }): Promise<ExecutionResult<any>> { return this.accountingUnavailable(); }
+  async getAgedBalances(_params: { kind: 'payable' | 'receivable'; asOf: string; currency: string }): Promise<ExecutionResult<any>> { return this.accountingUnavailable(); }
+  async getFinancialStatement(_params: { kind: 'profit_and_loss' | 'balance_sheet' | 'cash_flow'; dateFrom: string; dateTo: string; currency: string }): Promise<ExecutionResult<any>> { return this.accountingUnavailable(); }
+
+  private accountingUnavailable<T>(): ExecutionResult<T> {
+    return { success: false, error: { code: 'ACCOUNTING_SCHEMA_UNVERIFIED', message: 'This Odoo database has not been verified for accounting report models and fields.' }, durationMs: 0, auditId: `odoo-accounting-unverified-${Date.now()}` };
   }
 
   async createDraftInvoice(

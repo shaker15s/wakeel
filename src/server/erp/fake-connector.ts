@@ -5,6 +5,38 @@ import {
   ExecutionResult,
   IERPConnector,
 } from './contract';
+import { calculateAgedBalances, calculateFinancialStatement, calculateTrialBalance, readAccountActivity, readChartOfAccounts, type AccountingDataset } from '../accounting/read-tools';
+import type { Money } from '../accounting/money';
+
+function demoMoney(amount: string, currency: string): Money {
+  return { amount, currency, scale: currency === 'JPY' ? 0 : 2 };
+}
+
+export function createDemoAccountingDataset(): AccountingDataset {
+  return {
+    sourceSystem: 'fake-erp-synthetic-fixture',
+    accounts: [
+      { id: 'cash-egp', code: '1000', name: 'Cash', type: 'asset', currency: 'EGP' },
+      { id: 'receivable-egp', code: '1100', name: 'Accounts receivable', type: 'asset', currency: 'EGP' },
+      { id: 'payable-egp', code: '2000', name: 'Accounts payable', type: 'liability', currency: 'EGP' },
+      { id: 'equity-egp', code: '3000', name: 'Owner equity', type: 'equity', currency: 'EGP' },
+      { id: 'revenue-egp', code: '4000', name: 'Service revenue', type: 'income', currency: 'EGP' },
+      { id: 'expense-egp', code: '5000', name: 'Office expense', type: 'expense', currency: 'EGP' },
+    ],
+    lines: [
+      { id: 'demo-1a', journalId: 'demo-1', accountId: 'cash-egp', date: '2026-01-01', debit: demoMoney('10000.00', 'EGP'), credit: demoMoney('0.00', 'EGP'), reference: 'DEMO-OPENING' },
+      { id: 'demo-1b', journalId: 'demo-1', accountId: 'equity-egp', date: '2026-01-01', debit: demoMoney('0.00', 'EGP'), credit: demoMoney('10000.00', 'EGP'), reference: 'DEMO-OPENING' },
+      { id: 'demo-2a', journalId: 'demo-2', accountId: 'receivable-egp', date: '2026-01-15', debit: demoMoney('2500.00', 'EGP'), credit: demoMoney('0.00', 'EGP'), reference: 'DEMO-AR-001' },
+      { id: 'demo-2b', journalId: 'demo-2', accountId: 'revenue-egp', date: '2026-01-15', debit: demoMoney('0.00', 'EGP'), credit: demoMoney('2500.00', 'EGP'), reference: 'DEMO-AR-001' },
+      { id: 'demo-3a', journalId: 'demo-3', accountId: 'expense-egp', date: '2026-01-20', debit: demoMoney('300.00', 'EGP'), credit: demoMoney('0.00', 'EGP'), reference: 'DEMO-EXP-001' },
+      { id: 'demo-3b', journalId: 'demo-3', accountId: 'cash-egp', date: '2026-01-20', debit: demoMoney('0.00', 'EGP'), credit: demoMoney('300.00', 'EGP'), reference: 'DEMO-EXP-001' },
+    ],
+    openBalances: [
+      { id: 'demo-ap-001', kind: 'payable', partner: 'Demo Supplier', dueDate: '2026-01-10', amount: demoMoney('750.00', 'EGP') },
+      { id: 'demo-ar-001', kind: 'receivable', partner: 'Demo Customer', dueDate: '2026-02-10', amount: demoMoney('2500.00', 'EGP') },
+    ],
+  };
+}
 
 /**
  * Deterministic fake ERP connector for tests — no network, no real Odoo.
@@ -40,6 +72,7 @@ export class FakeERPConnector implements IERPConnector {
   private nextId = 1;
   private invoiceBehaviorQueue: InvoiceFaultBehavior[] = [];
   private verificationDrift: Partial<FakeInvoiceRecord> | null = null;
+  constructor(private accountingDataset: AccountingDataset = createDemoAccountingDataset()) {}
 
   /**
    * Test hook: queue the behavior for the next N createDraftInvoice() calls,
@@ -92,6 +125,7 @@ export class FakeERPConnector implements IERPConnector {
         canCreateDraftInvoices: true,
         canCreateDraftPurchases: true,
         canMutateFinancials: false,
+        canReadAccounting: true,
         rawPermissions: {},
       },
       confirmedEntities: ['customer', 'sale_order', 'invoice', 'product'],
@@ -139,6 +173,31 @@ export class FakeERPConnector implements IERPConnector {
 
   async getInventoryLevels(): Promise<ExecutionResult<{ totalItems: number; lowStockItems: any[] }>> {
     return { success: true, data: { totalItems: 0, lowStockItems: [] }, durationMs: 1, auditId: 'fake' };
+  }
+
+  async getChartOfAccounts(): Promise<ExecutionResult<any>> {
+    return this.accountingRead(() => readChartOfAccounts(this.accountingDataset));
+  }
+
+  async getTrialBalance(params: { dateFrom?: string; dateTo: string; currency: string }): Promise<ExecutionResult<any>> {
+    return this.accountingRead(() => calculateTrialBalance(this.accountingDataset, params));
+  }
+
+  async getAccountActivity(params: { accountId: string; dateFrom: string; dateTo: string; currency: string }): Promise<ExecutionResult<any>> {
+    return this.accountingRead(() => readAccountActivity(this.accountingDataset, params));
+  }
+
+  async getAgedBalances(params: { kind: 'payable' | 'receivable'; asOf: string; currency: string }): Promise<ExecutionResult<any>> {
+    return this.accountingRead(() => calculateAgedBalances(this.accountingDataset, params));
+  }
+
+  async getFinancialStatement(params: { kind: 'profit_and_loss' | 'balance_sheet' | 'cash_flow'; dateFrom: string; dateTo: string; currency: string }): Promise<ExecutionResult<any>> {
+    return this.accountingRead(() => calculateFinancialStatement(this.accountingDataset, params));
+  }
+
+  private accountingRead<T>(read: () => T): ExecutionResult<T> {
+    try { return { success: true, data: read(), durationMs: 1, auditId: `fake-accounting-${Date.now()}` }; }
+    catch (error) { return { success: false, error: { code: 'ACCOUNTING_READ_REVIEW_REQUIRED', message: error instanceof Error ? error.message : 'Accounting read is unavailable.' }, durationMs: 1, auditId: `fake-accounting-${Date.now()}` }; }
   }
 
   async createDraftInvoice(

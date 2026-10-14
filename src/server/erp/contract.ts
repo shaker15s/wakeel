@@ -47,6 +47,8 @@ export interface ERPPermissionSummary {
   canCreateDraftInvoices: boolean;
   canCreateDraftPurchases: boolean;
   canMutateFinancials: boolean;
+  /** Optional until a connector proves accounting-model access on the linked database. */
+  canReadAccounting?: boolean;
   rawPermissions: Record<string, boolean>;
 }
 
@@ -89,6 +91,11 @@ export interface IERPConnector {
   getSalesSummary(params: { dateFrom?: string; dateTo?: string }): Promise<ExecutionResult<{ totalRevenue: string; orderCount: number; currency: string | null; orders: any[] }>>;
   getReceivablesSummary(): Promise<ExecutionResult<{ totalOutstanding: string; overdueCount: number; currency: string | null; debtors: any[] }>>;
   getInventoryLevels(params?: { lowStockThreshold?: number }): Promise<ExecutionResult<{ totalItems: number; lowStockItems: any[] }>>;
+  getChartOfAccounts(): Promise<ExecutionResult<any>>;
+  getTrialBalance(params: { dateFrom?: string; dateTo: string; currency: string }): Promise<ExecutionResult<any>>;
+  getAccountActivity(params: { accountId: string; dateFrom: string; dateTo: string; currency: string }): Promise<ExecutionResult<any>>;
+  getAgedBalances(params: { kind: 'payable' | 'receivable'; asOf: string; currency: string }): Promise<ExecutionResult<any>>;
+  getFinancialStatement(params: { kind: 'profit_and_loss' | 'balance_sheet' | 'cash_flow'; dateFrom: string; dateTo: string; currency: string }): Promise<ExecutionResult<any>>;
 
   // Canonical Safe Mutation APIs (Creates draft states only, verified before execution)
   //

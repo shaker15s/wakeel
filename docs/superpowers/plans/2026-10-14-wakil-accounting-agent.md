@@ -203,12 +203,12 @@ If a target ERP/API or company accounting policy cannot be established from safe
 - Produces: read operations `get_chart_of_accounts`, `get_trial_balance({ dateFrom, dateTo, companyId? })`, `get_account_activity({ accountId, dateFrom, dateTo })`, `get_aged_balances({ kind: 'payable' | 'receivable', asOf })`, and `get_financial_statement({ kind: 'profit_and_loss' | 'balance_sheet' | 'cash_flow', dateFrom, dateTo, currency? })`.
 - Each output includes `{ sourceSystem, sourceRef?, readAt, period, currency, calculationVersion, warnings[] }` and the rows/totals needed to reproduce the displayed aggregate.
 
-- [ ] **Step 1: Create deterministic fixture tests.** Assert known trial balance totals, debit/credit balance, P&L/BS rollups, aging buckets, dates, currency grouping, and errors for missing report configuration.
-- [ ] **Step 2: Run tests against the fake connector and confirm failure.**
-- [ ] **Step 3: Implement canonical read methods in the fake connector and register each read tool with required capabilities.** No generic model/domain query is exposed to the model.
-- [ ] **Step 4: Add an Odoo adapter for only fields/models verified in current official docs and connector schemas.** Use mocked HTTP/JSON-RPC responses first; do not call a real tenant. Keep operation unavailable when API/permissions are unknown.
-- [ ] **Step 5: Verify all reports with deterministic expected outputs and expose evidence metadata to the answer renderer.**
-- [ ] **Step 6: Commit the grounded read tools.** Run `git add src/server/erp/contract.ts src/server/erp/fake-connector.ts src/server/erp/odoo-connector.ts src/server/accounting/read-tools.ts src/server/agent/tool-registry.ts tests/accounting/read-tools.test.ts tests/erp/odoo-read-tools.test.ts`, then `git commit -m "feat: add evidence-backed accounting queries"`.
+- [x] **Step 1: Create deterministic fixture tests.** Assert known trial balance totals, debit/credit balance, P&L/BS rollups, aging buckets, dates, currency grouping, and errors for missing report configuration.
+- [x] **Step 2: Run tests against the fake connector and confirm failure.**
+- [x] **Step 3: Implement canonical read methods in the fake connector and register each read tool with required capabilities.** No generic model/domain query is exposed to the model.
+- [x] **Step 4: Add an Odoo adapter for only fields/models verified in current official docs and connector schemas.** Use mocked HTTP/JSON-RPC responses first; do not call a real tenant. Keep operation unavailable when API/permissions are unknown. Odoo 19 describes database-specific models/methods; without a sandbox schema, all new Odoo accounting reads explicitly return schema-unverified and make no network call.
+- [x] **Step 5: Verify all reports with deterministic expected outputs and expose evidence metadata to the answer renderer.**
+- [x] **Step 6: Commit the grounded read tools.** Run `git add src/server/erp/contract.ts src/server/erp/fake-connector.ts src/server/erp/odoo-connector.ts src/server/accounting/read-tools.ts src/server/agent/tool-registry.ts tests/accounting/read-tools.test.ts tests/erp/odoo-read-tools.test.ts`, then `git commit -m "feat: add evidence-backed accounting queries"`.
 
 ## Task 8: Separate vendor-bill and customer-invoice draft workflows
 

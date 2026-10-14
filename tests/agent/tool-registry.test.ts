@@ -15,6 +15,7 @@ const createContext = (connector = new FakeERPConnector(), overrides: Partial<Fi
     canCreateDraftInvoices: true,
     canCreateDraftPurchases: false,
     canMutateFinancials: false,
+    canReadAccounting: true,
   },
   ...overrides,
 });
@@ -65,6 +66,18 @@ describe('finance tool registry', () => {
     expect(result.status).toBe('succeeded');
     expect(sales).toHaveBeenCalledOnce();
     expect(write).not.toHaveBeenCalled();
+  });
+
+  it('returns deterministic report evidence through the typed read-only accounting tool', async () => {
+    const connector = new FakeERPConnector();
+    const result = await executeFinanceTool(createContext(connector), 'get_trial_balance', {
+      dateFrom: '2026-01-01', dateTo: '2026-01-31', currency: 'EGP',
+    });
+    expect(result.status).toBe('succeeded');
+    if (result.status === 'succeeded') {
+      expect(result.evidence[0].provider).toBe('custom');
+      expect(result.data).toMatchObject({ data: { totals: { balanced: true }, evidence: { calculationVersion: 'wakeel-accounting-v1' } } });
+    }
   });
 
   it('does not call the connector when the server-derived capability is unavailable', async () => {

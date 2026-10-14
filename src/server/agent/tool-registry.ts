@@ -16,7 +16,7 @@ export interface FinanceToolContext {
 
 export interface FinanceTool<TInput = unknown, TOutput = unknown> {
   name: string;
-  domain: 'sales' | 'accounts_receivable' | 'inventory' | 'customers' | 'accounts_payable';
+  domain: 'sales' | 'accounts_receivable' | 'inventory' | 'customers' | 'accounts_payable' | 'accounting';
   description: string;
   riskClass: FinanceRiskClass;
   inputSchema: z.ZodType<TInput>;
@@ -45,6 +45,19 @@ const salesInput = z.object({ dateFrom: date.optional(), dateTo: date.optional()
 const receivablesInput = emptyInput;
 const inventoryInput = z.object({ lowStockThreshold: z.number().int().min(0).max(100_000).default(10) }).strict();
 const customerSearchInput = z.object({ name: z.string().trim().min(1).max(128) }).strict();
+const accountingReportInput = z.object({ dateFrom: date.optional(), dateTo: date, currency: z.string().trim().regex(/^[A-Za-z]{3}$/) }).strict().refine(
+  ({ dateFrom, dateTo }) => !dateFrom || dateFrom <= dateTo,
+  { message: 'dateFrom must be on or before dateTo' },
+);
+const accountActivityInput = z.object({ accountId: z.string().trim().min(1).max(128), dateFrom: date, dateTo: date, currency: z.string().trim().regex(/^[A-Za-z]{3}$/) }).strict().refine(
+  ({ dateFrom, dateTo }) => dateFrom <= dateTo,
+  { message: 'dateFrom must be on or before dateTo' },
+);
+const agedBalancesInput = z.object({ kind: z.enum(['payable', 'receivable']), asOf: date, currency: z.string().trim().regex(/^[A-Za-z]{3}$/) }).strict();
+const statementInput = z.object({ kind: z.enum(['profit_and_loss', 'balance_sheet', 'cash_flow']), dateFrom: date, dateTo: date, currency: z.string().trim().regex(/^[A-Za-z]{3}$/) }).strict().refine(
+  ({ dateFrom, dateTo }) => dateFrom <= dateTo,
+  { message: 'dateFrom must be on or before dateTo' },
+);
 const invoiceInput = z.object({
   customerId: z.union([z.string().trim().min(1).max(128), z.number().int().positive()]),
   lines: z.array(z.object({
@@ -94,6 +107,26 @@ export const FINANCE_TOOLS: readonly FinanceTool<any, any>[] = [
       filter: [['name', 'ilike', input.name]],
       limit: 50,
     }),
+  },
+  {
+    name: 'get_chart_of_accounts', domain: 'accounting', description: 'Read the verified chart of accounts.', riskClass: 'READ', inputSchema: emptyInput, requiredCapability: 'canReadAccounting',
+    execute: (ctx) => ctx.connector.getChartOfAccounts(),
+  },
+  {
+    name: 'get_trial_balance', domain: 'accounting', description: 'Read debit and credit totals by account for an explicit date range and currency.', riskClass: 'READ', inputSchema: accountingReportInput, requiredCapability: 'canReadAccounting',
+    execute: (ctx, input) => ctx.connector.getTrialBalance(input),
+  },
+  {
+    name: 'get_account_activity', domain: 'accounting', description: 'Read ledger activity for one account, date range, and currency.', riskClass: 'READ', inputSchema: accountActivityInput, requiredCapability: 'canReadAccounting',
+    execute: (ctx, input) => ctx.connector.getAccountActivity(input),
+  },
+  {
+    name: 'get_aged_balances', domain: 'accounting', description: 'Read payable or receivable aging buckets for an as-of date and currency.', riskClass: 'READ', inputSchema: agedBalancesInput, requiredCapability: 'canReadAccounting',
+    execute: (ctx, input) => ctx.connector.getAgedBalances(input),
+  },
+  {
+    name: 'get_financial_statement', domain: 'accounting', description: 'Read a profit and loss or balance sheet report; cash flow is returned as review-required until configured.', riskClass: 'READ', inputSchema: statementInput, requiredCapability: 'canReadAccounting',
+    execute: (ctx, input) => ctx.connector.getFinancialStatement(input),
   },
   {
     name: 'create_draft_invoice',
