@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { withTaskLock } from './task-lock';
 import { PolicyEngine } from '@/server/policy/engine';
 import { IERPConnector } from '@/server/erp/contract';
 import { computeActionHash } from './action-hash';
@@ -28,6 +29,8 @@ export interface ExecutorDeps {
 }
 
 export interface CreateTaskParams {
+  /** Trusted caller-generated ID for idempotent intake; never accepted raw from a user. */
+  taskId?: string;
   tenantId: string;
   actorId: string;
   input: unknown;
@@ -43,7 +46,7 @@ export interface CreateTaskParams {
  */
 export async function createCreateDraftInvoiceTask(deps: ExecutorDeps, params: CreateTaskParams): Promise<Task> {
   const now = (deps.now ?? (() => new Date()))();
-  const taskId = randomUUID();
+  const taskId = params.taskId ?? randomUUID();
   const deadline = new Date(now.getTime() + (params.deadlineMs ?? DEFAULT_TASK_TTL_MS));
 
   const task = await deps.store.createTask({
@@ -136,7 +139,10 @@ async function succeed(deps: ExecutorDeps, tenantId: string, taskId: string, sum
  * Tenant-scoped like every other store operation: a task invisible to
  * `tenantId` here throws, same as `advance()`.
  */
-export async function cancelTask(
+export function cancelTask(deps: ExecutorDeps, tenantId: string, taskId: string, actorId: string, reason?: string): Promise<Task> {
+  return withTaskLock(deps.store, taskId, () => cancelTaskUnlocked(deps, tenantId, taskId, actorId, reason));
+}
+async function cancelTaskUnlocked(
   deps: ExecutorDeps,
   tenantId: string,
   taskId: string,
@@ -149,7 +155,7 @@ export async function cancelTask(
 
   const steps = await deps.store.listSteps(taskId);
   const executeStep = steps.find((s) => s.name === 'execute_write');
-  if (executeStep?.status === 'succeeded') {
+  if (executeStep?.status === 'succeeded' || executeStep?.status === 'running' || (executeStep?.idempotencyKey && (await deps.store.getIdempotencyRecord(tenantId, TOOL_NAME, executeStep.idempotencyKey))?.status === 'in_progress')) {
     throw new Error(
       'Cannot cancel: the write already completed. This requires a compensating action (e.g. voiding the invoice), not a cancellation.',
     );
@@ -197,12 +203,15 @@ export async function cancelTask(
  * task reached a terminal state, or because it is now blocked on a human
  * decision (`waiting_for_approval`).
  */
-export async function advance(deps: ExecutorDeps, tenantId: string, taskId: string): Promise<Task> {
-  const now = (deps.now ?? (() => new Date()))();
+export function advance(deps: ExecutorDeps, tenantId: string, taskId: string): Promise<Task> {
+  return withTaskLock(deps.store, taskId, () => advanceUnlocked(deps, tenantId, taskId));
+}
+async function advanceUnlocked(deps: ExecutorDeps, tenantId: string, taskId: string): Promise<Task> {
   let task = await deps.store.getTask(tenantId, taskId);
   if (!task) throw new Error(`Task ${taskId} not found for tenant ${tenantId}`);
 
   while (true) {
+    const now = (deps.now ?? (() => new Date()))();
     if (TERMINAL_TASK_STATUSES.has(task.status)) return task;
 
     if (task.deadline.getTime() < now.getTime()) {
@@ -215,10 +224,14 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
 
     const steps = await deps.store.listSteps(taskId);
     const current = steps.find((s) => s.status !== 'succeeded' && s.status !== 'skipped' && s.status !== 'failed');
+    if (steps.length !== CREATE_DRAFT_INVOICE_STEPS.length || steps.some((step, i) => step.name !== CREATE_DRAFT_INVOICE_STEPS[i])) {
+      return fail(deps, tenantId, taskId, 'Incomplete workflow state; manual review required.', ['incomplete_workflow_state']);
+    }
     if (!current) {
-      // All steps resolved without the per-step handlers setting a terminal
-      // task status — defensive fallback, should not happen in practice.
-      return succeed(deps, tenantId, taskId, 'All steps completed.');
+      if (steps.some(s => s.status === 'failed') || steps.find(s => s.name === 'verify')?.status !== 'succeeded') {
+        return fail(deps, tenantId, taskId, 'No verified result is available.', ['missing_verification_evidence']);
+      }
+      return succeed(deps, tenantId, taskId, 'All steps completed and verified.');
     }
 
     if (current.name === 'validate_input') {
@@ -397,17 +410,15 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
       // doesn't belong to this task/tool at all — is caught here, as the
       // last line of defense before an external side effect happens.
       const approvalStepOutput = approvalStep.output as { approvalId?: string } | undefined;
-      let expectedHash = (policyStep.output as { actionHash: string }).actionHash;
-      if (approvalStepOutput?.approvalId) {
-        const approval = await deps.store.getApproval(tenantId, approvalStepOutput.approvalId);
-        if (!approval || approval.status !== 'approved' || approval.taskId !== taskId || approval.toolName !== TOOL_NAME) {
-          await deps.store.updateStep(taskId, current.id, { status: 'failed', errorCode: 'APPROVAL_INVALID', finishedAt: now });
-          return fail(deps, tenantId, taskId, 'Approval record is missing, unapproved, or does not match this task; refusing to execute.', [
-            'approval_invalid_at_execution',
-          ]);
-        }
-        expectedHash = approval.actionHash;
+      const approval = approvalStepOutput?.approvalId
+        ? await deps.store.getApproval(tenantId, approvalStepOutput.approvalId)
+        : null;
+      // v0 is ALWAYS approval-gated. Missing a reference is not permission.
+      if (!approval || approval.status !== 'approved' || approval.taskId !== taskId || approval.toolName !== TOOL_NAME || approval.expiresAt.getTime() <= now.getTime()) {
+        await deps.store.updateStep(taskId, current.id, { status: 'failed', errorCode: 'APPROVAL_INVALID', finishedAt: now });
+        return fail(deps, tenantId, taskId, 'Approval is missing, expired, unapproved, or does not match this task; refusing to execute.', ['approval_invalid_at_execution']);
       }
+      const expectedHash = approval.actionHash;
       if (recomputedHash !== expectedHash) {
         await deps.store.updateStep(taskId, current.id, { status: 'failed', errorCode: 'ACTION_HASH_MISMATCH', finishedAt: now });
         return fail(deps, tenantId, taskId, 'Approved action hash does not match the action about to execute; refusing to execute.', [
@@ -444,10 +455,16 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
         mismatches.push('verification_read_failed: invoice not found after creation');
       } else {
         if (String(verified.customerId) !== String(input.customerId)) mismatches.push('customerId_mismatch');
-        if (typeof verified.totalAmount === 'number' && Math.abs(verified.totalAmount - expectedAmount) > 0.005) {
+        if (typeof verified.totalAmount !== 'number' || !Number.isFinite(verified.totalAmount) || Math.abs(verified.totalAmount - expectedAmount) > 0.005) {
           mismatches.push('amount_mismatch');
         }
-        if (Array.isArray(verified.lines) && verified.lines.length !== input.lines.length) mismatches.push('line_count_mismatch');
+        if (String(verified.id) !== String(written.invoiceId)) mismatches.push('invoice_id_mismatch');
+        if (verified.state !== 'draft') mismatches.push('invoice_state_mismatch');
+        if (!Array.isArray(verified.lines) || verified.lines.length !== input.lines.length) mismatches.push('line_count_mismatch');
+        else if (input.lines.some((line, i) => {
+          const actual = verified.lines[i];
+          return !actual || actual.description !== line.description || actual.quantity !== line.quantity || actual.unitPrice !== line.unitPrice || (line.productId !== undefined && String(actual.productId) !== String(line.productId));
+        })) mismatches.push('line_content_mismatch');
       }
 
       if (mismatches.length === 0) {
@@ -494,11 +511,10 @@ async function runIdempotentWrite(
   const now = (deps.now ?? (() => new Date()))();
   const existing = await deps.store.getIdempotencyRecord(tenantId, TOOL_NAME, idempotencyKey);
 
+  if (existing && existing.requestHash !== requestHash) {
+    return { status: 'blocked', task: await fail(deps, tenantId, taskId, 'Idempotency key reused with a different request.', ['idempotency_key_reused_with_different_request']) };
+  }
   if (existing?.status === 'completed') {
-    if (existing.requestHash !== requestHash) {
-      await deps.store.updateStep(taskId, stepId, { status: 'failed', errorCode: 'IDEMPOTENCY_KEY_REUSED', finishedAt: now });
-      return { status: 'blocked', task: await fail(deps, tenantId, taskId, 'Idempotency key reused with a different request.', ['idempotency_key_reused_with_different_request']) };
-    }
     // Dedup: a previous attempt already completed this exact write
     // (possibly the process crashed right after, before the step record was
     // updated). Reuse the cached result; do NOT call the connector again.
@@ -508,9 +524,9 @@ async function runIdempotentWrite(
 
   if (existing?.status === 'in_progress') {
     const reconciled = await tryReconcile(deps, tenantId, idempotencyKey);
-    if (reconciled) {
-      await deps.store.completeIdempotencyRecord(tenantId, TOOL_NAME, idempotencyKey, reconciled);
-      await deps.store.updateStep(taskId, stepId, { status: 'succeeded', output: reconciled, finishedAt: now });
+    if (reconciled.status === 'found') {
+      await deps.store.completeIdempotencyRecord(tenantId, TOOL_NAME, idempotencyKey, reconciled.result);
+      await deps.store.updateStep(taskId, stepId, { status: 'succeeded', output: reconciled.result, finishedAt: now });
       return { status: 'advanced' };
     }
     // Ambiguous: a previous attempt is (or claims to be) still in flight and
@@ -536,7 +552,7 @@ async function runIdempotentWrite(
     };
   }
 
-  await deps.store.updateStep(taskId, stepId, { status: 'running', attempt: step.attempt + 1, startedAt: now });
+  await deps.store.updateStep(taskId, stepId, { status: 'running', attempt: step.attempt + 1, idempotencyKey, startedAt: now });
   await deps.store.startIdempotencyRecord({ tenantId, toolName: TOOL_NAME, idempotencyKey, requestHash });
   await deps.store.appendEvent({ taskId, type: 'step_started', actorType: 'system', payload: { step: 'execute_write', attempt: step.attempt + 1 } });
 
@@ -567,16 +583,16 @@ async function runIdempotentWrite(
     // reconciliation if it is supported; otherwise this is ambiguous and
     // must be escalated, never silently retried.
     const reconciled = await tryReconcile(deps, tenantId, idempotencyKey);
-    if (reconciled) {
-      await deps.store.completeIdempotencyRecord(tenantId, TOOL_NAME, idempotencyKey, reconciled);
-      await deps.store.updateStep(taskId, stepId, { status: 'succeeded', output: reconciled, finishedAt: now });
+    if (reconciled.status === 'found') {
+      await deps.store.completeIdempotencyRecord(tenantId, TOOL_NAME, idempotencyKey, reconciled.result);
+      await deps.store.updateStep(taskId, stepId, { status: 'succeeded', output: reconciled.result, finishedAt: now });
       return { status: 'advanced' };
     }
 
     const refreshedStep = await deps.store.getStep(taskId, stepId);
     const hasRetriesLeft = !!refreshedStep && refreshedStep.attempt < refreshedStep.maxAttempts;
-    if (hasRetriesLeft && !deps.connector.findByIdempotencyKey) {
-      // No reconciliation capability at all: we cannot distinguish "transient,
+    if (reconciled.status === 'unknown') {
+      // Missing/failed reconciliation: we cannot distinguish "transient,
       // nothing happened" from "crashed after success". Do not guess — leave
       // the idempotency record in_progress and escalate.
       await deps.store.updateStep(taskId, stepId, { status: 'failed', errorCode: 'AMBIGUOUS_WRITE_OUTCOME', finishedAt: now });
@@ -589,7 +605,7 @@ async function runIdempotentWrite(
     }
 
     // Connector supports reconciliation and confirmed nothing was written
-    // (tryReconcile returned null) — safe to mark this attempt failed and
+    // (tryReconcile returned absent) — safe to mark this attempt failed and
     // let the loop retry on the next advance() call, up to maxAttempts.
     await deps.store.failIdempotencyRecord(tenantId, TOOL_NAME, idempotencyKey);
     await deps.store.updateStep(taskId, stepId, { status: 'failed', errorCode: 'TRANSIENT_ERROR', finishedAt: now });
@@ -605,15 +621,18 @@ async function runIdempotentWrite(
   }
 }
 
-async function tryReconcile(deps: ExecutorDeps, tenantId: string, idempotencyKey: string): Promise<unknown | null> {
-  if (!deps.connector.findByIdempotencyKey) return null;
+type Reconciliation = { status: 'found'; result: unknown } | { status: 'absent' | 'unknown' };
+async function tryReconcile(deps: ExecutorDeps, tenantId: string, idempotencyKey: string): Promise<Reconciliation> {
+  if (!deps.connector.findByIdempotencyKey) return { status: 'unknown' };
   try {
     const found = await deps.connector.findByIdempotencyKey('invoice', idempotencyKey);
-    if (found.success && found.data) {
-      return { invoiceId: found.data.id, invoiceNumber: `FAKE-INV-${found.data.id}`, state: 'draft' as const };
+    if (!found.success) return { status: 'unknown' };
+    if (found.data && found.data.id !== undefined) {
+      return { status: 'found', result: { invoiceId: found.data.id, state: 'draft' as const } };
     }
-    return null;
+    // Only an explicit, successful null read is authoritative absence.
+    return { status: found.data === null ? 'absent' : 'unknown' };
   } catch {
-    return null;
+    return { status: 'unknown' };
   }
 }

@@ -31,10 +31,11 @@ async function asJson<T>(res: Response): Promise<T> {
 export async function createDemoTask(
   tenantId: string,
   input: CreateDemoTaskInput,
+  requestKey?: string,
 ): Promise<{ tenantId: string; task: TaskView }> {
   const res = await fetch("/api/demo/invoice-task", {
     method: "POST",
-    headers: { "Content-Type": "application/json", [DEMO_TENANT_HEADER]: tenantId },
+    headers: { "Content-Type": "application/json", [DEMO_TENANT_HEADER]: tenantId, ...(requestKey ? { "x-idempotency-key": requestKey } : {}) },
     body: JSON.stringify(input),
   });
   return asJson(res);
@@ -68,4 +69,11 @@ export async function decideDemoApproval(
     body: JSON.stringify({ decision, ...opts }),
   });
   return asJson(res);
+}
+
+export async function listDemoTasks(tenantId: string): Promise<{ tasks: TaskView[] }> {
+  return asJson(await fetch('/api/demo/invoice-task', { headers: { [DEMO_TENANT_HEADER]: tenantId }, cache: 'no-store' }));
+}
+export async function resumeDemoTask(tenantId: string, taskId: string): Promise<{ task: TaskView }> {
+  return asJson(await fetch(`/api/demo/invoice-task/${taskId}/resume`, { method: 'POST', headers: { [DEMO_TENANT_HEADER]: tenantId } }));
 }

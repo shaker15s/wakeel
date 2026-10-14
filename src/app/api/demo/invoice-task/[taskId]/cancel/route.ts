@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { handleRoute, jsonError } from '@/lib/wakeel/http';
 import { cancelTask } from '@/server/runtime/executor';
-import { getDemoExecutorDeps } from '@/server/runtime/demo-store';
+import { getDemoExecutorDeps, withDemoMutation } from '@/server/runtime/demo-store';
 import { readDemoTenantId } from '@/server/runtime/demo-tenant';
 import { buildTaskView } from '@/server/runtime/demo-view';
 
@@ -11,7 +11,7 @@ type RouteParams = { params: Promise<{ taskId: string }> };
 const cancelSchema = z.object({ reason: z.string().optional() });
 
 export async function POST(req: Request, { params }: RouteParams) {
-  return handleRoute(async () => {
+  return handleRoute(() => withDemoMutation(async () => {
     const { taskId } = await params;
     const tenantId = readDemoTenantId(req);
     if (!tenantId) return jsonError(400, 'Missing or invalid demo tenant id — send an x-demo-tenant-id header.');
@@ -34,5 +34,5 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     const view = await buildTaskView(deps.store, tenantId, taskId);
     return NextResponse.json({ task: view });
-  });
+  }));
 }

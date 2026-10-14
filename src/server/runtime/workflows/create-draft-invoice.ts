@@ -9,21 +9,21 @@ import { z } from 'zod';
 export const WORKFLOW_TYPE = 'create_draft_invoice' as const;
 
 export const createDraftInvoiceInputSchema = z.object({
-  customerId: z.union([z.string(), z.number()]).refine((v) => String(v).trim().length > 0, {
+  customerId: z.union([z.string().trim().max(100), z.number().finite()]).refine((v) => String(v).trim().length > 0, {
     message: 'customerId must not be empty',
   }),
   lines: z
     .array(
       z.object({
-        productId: z.union([z.string(), z.number()]).optional(),
-        description: z.string().min(1, 'line description must not be empty'),
+        productId: z.union([z.string().trim().max(100), z.number().finite()]).optional(),
+        description: z.string().trim().min(1, 'line description must not be empty').max(500),
         quantity: z.number().positive('quantity must be > 0'),
         unitPrice: z.number().nonnegative('unitPrice must be >= 0'),
       }),
     )
-    .min(1, 'at least one line is required'),
-  memo: z.string().optional(),
-});
+    .min(1, 'at least one line is required').max(100),
+  memo: z.string().max(4000).optional(),
+}).refine(input => Number.isFinite(input.lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0)) && input.lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0) <= 1e12, { message: 'Invoice total exceeds the supported limit' });
 
 export type CreateDraftInvoiceInput = z.infer<typeof createDraftInvoiceInputSchema>;
 

@@ -24,6 +24,8 @@ export interface TaskView extends Omit<Task, 'deadline' | 'createdAt' | 'updated
   steps: TaskStepView[];
   events: TaskEventView[];
   pendingApproval: ApprovalView | null;
+  /** Durable decision record retained in receipts after it is no longer pending. */
+  approval: ApprovalView | null;
 }
 
 function viewStep(step: TaskStep): TaskStepView {
@@ -54,10 +56,12 @@ export async function buildTaskView(store: TaskStore, tenantId: string, taskId: 
   const events = await store.listEvents(taskId);
 
   let pendingApproval: ApprovalView | null = null;
+  let decisionRecord: ApprovalView | null = null;
   const approvalStep = steps.find((s) => s.name === 'await_approval');
   const approvalId = (approvalStep?.output as { approvalId?: string } | undefined)?.approvalId;
   if (approvalId) {
     const approval = await store.getApproval(tenantId, approvalId);
+    if (approval) decisionRecord = viewApproval(approval);
     if (approval && approval.status === 'pending') pendingApproval = viewApproval(approval);
   }
 
@@ -69,5 +73,6 @@ export async function buildTaskView(store: TaskStore, tenantId: string, taskId: 
     steps: steps.map(viewStep),
     events: events.map(viewEvent),
     pendingApproval,
+    approval: decisionRecord,
   };
 }
