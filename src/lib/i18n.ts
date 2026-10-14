@@ -630,6 +630,23 @@ export const en = {
     logLabel: "Agent conversation",
   },
 
+  memory: {
+    title: "Remembered preferences",
+    description: "Only notes you save here are remembered. These notes do not set accounting rules, approvals, or permissions.",
+    open: "Memory",
+    close: "Close memory panel",
+    key: "Name, e.g. report language",
+    value: "Value to remember",
+    category: "Memory type",
+    preference: "Preference",
+    workContext: "Confirmed work context",
+    remember: "Remember",
+    update: "Update",
+    edit: "Edit",
+    forget: "Forget",
+    empty: "No saved notes yet. Add a preference or work context explicitly.",
+  },
+
   share: {
     // owner-side panel
     button: "SHARE",
@@ -1357,6 +1374,23 @@ export const ar: Dict = {
     sending: "المشغّل · يُرسل…",
     toastErr: "واكيل خارج التغطية",
     logLabel: "محادثة الوكيل",
+  },
+
+  memory: {
+    title: "التفضيلات المحفوظة",
+    description: "لا يتذكر الوكيل إلا ما تحفظه هنا. هذه الملاحظات لا تحدد قواعد محاسبية أو موافقات أو صلاحيات.",
+    open: "الذاكرة",
+    close: "إغلاق لوحة الذاكرة",
+    key: "الاسم، مثل لغة التقارير",
+    value: "المعلومة المراد حفظها",
+    category: "نوع الذاكرة",
+    preference: "تفضيل",
+    workContext: "سياق عمل مؤكد",
+    remember: "احفظ",
+    update: "تحديث",
+    edit: "تعديل",
+    forget: "انسَ",
+    empty: "لا توجد ملاحظات محفوظة. أضف تفضيلًا أو سياق عمل صراحةً.",
   },
 
   share: {

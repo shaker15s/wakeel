@@ -28,42 +28,44 @@ model Account {
 }
 
 model User {
-  id        String        @id @default(cuid())
-  accountId String?
-  account   Account?      @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  name      String
-  workspace String
-  role      String?
-  createdAt DateTime      @default(now())
-  systems   AiSystem[]
-  scans     ScanSession[]
-  activities Activity[]
-  chats     ChatMessage[]
+  id            String              @id @default(cuid())
+  accountId     String?
+  account       Account?            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name          String
+  workspace     String
+  role          String?
+  createdAt     DateTime            @default(now())
+  systems       AiSystem[]
+  scans         ScanSession[]
+  activities    Activity[]
+  chats         ChatMessage[]
+  memories      AgentMemory[]
+  conversations AgentConversation[]
 
   @@index([accountId])
 }
 
 model AiSystem {
-  id           String         @id @default(cuid())
+  id           String          @id @default(cuid())
   userId       String
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   name         String
   description  String
   category     String // CRM | ERP | FINANCE | HR | COMMUNICATION | STORAGE | MARKETING | SUPPORT | OPERATIONS | CUSTOM
   icon         String // lucide icon name
   color        String
   origin       String // DISCOVERED | CREATED
-  status       String         @default("ACTIVE") // ACTIVE | DRAFT | ARCHIVED
-  health       Int            @default(90)
+  status       String          @default("ACTIVE") // ACTIVE | DRAFT | ARCHIVED
+  health       Int             @default(90)
   confidence   Int?
   source       String?
-  blueprint    String         @default("{}")
-  capabilities String         @default("[]")
+  blueprint    String          @default("{}")
+  capabilities String          @default("[]")
   records      SystemRecord[]
   runs         AutomationRun[]
   shares       ShareLink[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 
   @@index([userId])
 }
@@ -133,20 +135,60 @@ model Activity {
 }
 
 model ChatMessage {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      String // USER | AGENT
-  content   String
-  createdAt DateTime @default(now())
+  id             String             @id @default(cuid())
+  userId         String
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId       String?
+  conversationId String?
+  conversation   AgentConversation? @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+  role           String // USER | AGENT
+  content        String
+  createdAt      DateTime           @default(now())
 
-  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([tenantId, conversationId, createdAt])
+}
+
+/// One durable conversation per authenticated operator. Existing ChatMessage
+/// rows remain unassociated; chat routes can include that owner's legacy history.
+model AgentConversation {
+  id        String        @id @default(cuid())
+  tenantId  String
+  actorId   String
+  title     String        @default("Accounting workspace")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  actor     User          @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, actorId])
+  @@index([tenantId, actorId, updatedAt])
+}
+
+/// Explicit operator-approved notes. Categories deliberately exclude policy,
+/// permissions, credentials, and accounting rules.
+model AgentMemory {
+  id          String   @id @default(cuid())
+  tenantId    String
+  actorId     String
+  key         String
+  value       String
+  category    String
+  source      String
+  confirmedBy String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  actor       User     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, actorId, key])
+  @@index([tenantId, actorId, category, updatedAt])
 }
 
 // Durable WAKIL accounting execution. Every child table carries tenantId so
 // application queries can enforce isolation without trusting a task/step id.
 model RuntimeTask {
-  id           String              @id
+  id           String             @id
   tenantId     String
   actorId      String
   workflowType String
@@ -155,8 +197,8 @@ model RuntimeTask {
   inputJson    String
   resultJson   String?
   deadline     DateTime
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
   steps        RuntimeTaskStep[]
   approvals    RuntimeApproval[]
   events       RuntimeTaskEvent[]
@@ -166,23 +208,23 @@ model RuntimeTask {
 }
 
 model RuntimeTaskStep {
-  id          String      @id
-  tenantId    String
-  taskId      String
-  sequence    Int
-  name        String
-  status      String
-  attempt     Int
-  maxAttempts Int
-  inputJson   String?
-  outputJson  String?
-  errorCode   String?
-  errorMessage String?
+  id             String            @id
+  tenantId       String
+  taskId         String
+  sequence       Int
+  name           String
+  status         String
+  attempt        Int
+  maxAttempts    Int
+  inputJson      String?
+  outputJson     String?
+  errorCode      String?
+  errorMessage   String?
   idempotencyKey String?
-  startedAt   DateTime?
-  finishedAt  DateTime?
-  task        RuntimeTask @relation(fields: [tenantId, taskId], references: [tenantId, id], onDelete: Cascade)
-  approvals   RuntimeApproval[]
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  task           RuntimeTask       @relation(fields: [tenantId, taskId], references: [tenantId, id], onDelete: Cascade)
+  approvals      RuntimeApproval[]
 
   @@unique([tenantId, taskId, id])
   @@unique([taskId, sequence])
@@ -190,54 +232,54 @@ model RuntimeTaskStep {
 }
 
 model RuntimeApproval {
-  id               String          @id
-  tenantId         String
-  taskId           String
-  stepId           String
-  toolName         String
-  actionHash       String
+  id                   String          @id
+  tenantId             String
+  taskId               String
+  stepId               String
+  toolName             String
+  actionHash           String
   normalizedParamsJson String
-  policyVersion    String
-  riskLevel        String
-  summary          String
-  status           String
-  requestedAt      DateTime        @default(now())
-  expiresAt        DateTime
-  decidedBy        String?
-  decidedAt        DateTime?
-  reason           String?
-  task             RuntimeTask     @relation(fields: [tenantId, taskId], references: [tenantId, id], onDelete: Cascade)
-  step             RuntimeTaskStep @relation(fields: [tenantId, taskId, stepId], references: [tenantId, taskId, id], onDelete: Cascade)
+  policyVersion        String
+  riskLevel            String
+  summary              String
+  status               String
+  requestedAt          DateTime        @default(now())
+  expiresAt            DateTime
+  decidedBy            String?
+  decidedAt            DateTime?
+  reason               String?
+  task                 RuntimeTask     @relation(fields: [tenantId, taskId], references: [tenantId, id], onDelete: Cascade)
+  step                 RuntimeTaskStep @relation(fields: [tenantId, taskId, stepId], references: [tenantId, taskId, id], onDelete: Cascade)
 
   @@unique([tenantId, id])
   @@index([tenantId, status, expiresAt])
 }
 
 model RuntimeTaskEvent {
-  id        String      @id
-  tenantId  String
-  taskId    String
-  sequence  Int
-  type      String
-  actorType String
-  actorId   String?
+  id          String      @id
+  tenantId    String
+  taskId      String
+  sequence    Int
+  type        String
+  actorType   String
+  actorId     String?
   payloadJson String
-  createdAt DateTime    @default(now())
-  task      RuntimeTask @relation(fields: [tenantId, taskId], references: [tenantId, id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+  task        RuntimeTask @relation(fields: [tenantId, taskId], references: [tenantId, id], onDelete: Cascade)
 
   @@unique([taskId, sequence])
   @@index([tenantId, taskId, sequence])
 }
 
 model RuntimeIdempotencyRecord {
-  tenantId      String
-  toolName      String
+  tenantId       String
+  toolName       String
   idempotencyKey String
-  requestHash   String
-  status        String
-  resultRefJson String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  requestHash    String
+  status         String
+  resultRefJson  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@id([tenantId, toolName, idempotencyKey])
   @@index([tenantId, status, updatedAt])

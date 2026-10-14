@@ -1,6 +1,7 @@
 import { runConversationTurn } from './conversation-runtime';
 import type { ModelProvider } from './model-provider';
 import type { IERPConnector } from '../erp/contract';
+import type { MemoryItem } from './memory-store';
 
 export interface AgentRunContext {
   operatorId: string;
@@ -9,6 +10,8 @@ export interface AgentRunContext {
   lang: 'ar' | 'en';
   connector?: IERPConnector | null;
   provider?: ModelProvider;
+  conversationId?: string;
+  memories?: MemoryItem[];
 }
 
 export interface AgentRunResponse {
@@ -39,11 +42,12 @@ export class AgentRuntime {
     const result = await runConversationTurn({
       tenantId: ctx.operatorId,
       actorId: ctx.operatorId,
-      conversationId: `${ctx.workspaceName}:${ctx.operatorId}`,
+      conversationId: ctx.conversationId ?? 'current-conversation',
       userMessage,
       lang,
       operatorName: ctx.operatorName,
       workspaceName: ctx.workspaceName,
+      memories: ctx.memories,
       history,
       connector: ctx.connector,
       provider: ctx.provider,

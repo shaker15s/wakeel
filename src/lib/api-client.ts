@@ -104,6 +104,17 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+export interface AgentMemory {
+  id: string;
+  key: string;
+  value: string;
+  category: 'preference' | 'confirmed_work_context';
+  source: 'explicit_user_confirmation';
+  confirmedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SystemRecordDTO {
   id: string;
   systemId: string;
@@ -469,6 +480,28 @@ export function getChat(userId: string) {
   return api<{ messages: ChatMessage[] }>(
     `/api/agent/chat?userId=${encodeURIComponent(userId)}`
   );
+}
+
+export function getAgentMemory(userId: string) {
+  return api<{ items: AgentMemory[] }>(`/api/agent/memory?userId=${encodeURIComponent(userId)}`);
+}
+
+export function saveAgentMemory(userId: string, item: Pick<AgentMemory, 'key' | 'value' | 'category'>) {
+  return api<{ item: AgentMemory }>('/api/agent/memory', {
+    method: 'POST', body: JSON.stringify({ userId, ...item }),
+  });
+}
+
+export function updateAgentMemory(userId: string, memoryId: string, patch: Partial<Pick<AgentMemory, 'key' | 'value' | 'category'>>) {
+  return api<{ item: AgentMemory }>('/api/agent/memory', {
+    method: 'PATCH', body: JSON.stringify({ userId, memoryId, ...patch }),
+  });
+}
+
+export function forgetAgentMemory(userId: string, memoryId: string) {
+  return api<{ ok: true }>('/api/agent/memory', {
+    method: 'DELETE', body: JSON.stringify({ userId, memoryId }),
+  });
 }
 
 export function sendChat(userId: string, message: string, lang?: "en" | "ar") {

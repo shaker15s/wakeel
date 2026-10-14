@@ -156,12 +156,12 @@ If a target ERP/API or company accounting policy cannot be established from safe
 - Produces: `MemoryStore.list(tenantId, actorId): Promise<MemoryItem[]>`, `remember(tenantId, actorId, item): Promise<MemoryItem>`, `update(tenantId, actorId, memoryId, patch): Promise<MemoryItem>`, and `forget(tenantId, actorId, memoryId): Promise<void>`.
 - `MemoryItem` fields: `{ id, key, value, category: 'preference' | 'confirmed_work_context', source, confirmedBy, createdAt, updatedAt }`. No implicit memory-write function is available to the model.
 
-- [ ] **Step 1: Test explicit save/update/forget and cross-tenant isolation.** Assert a remembered display preference is reused in a later conversation, user correction changes it, forget removes it, and a financial policy/tax claim cannot be stored as an approved rule through the memory tool.
-- [ ] **Step 2: Run focused tests and confirm failure.**
-- [ ] **Step 3: Add conversation identifiers and Prisma-backed memory models with unique, scoped lookups.** Preserve existing history where safe; do not delete or rewrite old messages as part of migration.
-- [ ] **Step 4: Add authenticated list/update/delete APIs and explicit “remember this” UX/action.** The server derives account/operator identity; the model can suggest a memory but cannot persist it without explicit user intent.
-- [ ] **Step 5: Run API/database tests including cross-account access and ensure redaction/retention rules apply.**
-- [ ] **Step 6: Commit conversation and memory support.** Run `git add prisma/schema.prisma src/server/agent/memory-store.ts src/app/api/agent/memory/route.ts src/app/api/agent/chat/route.ts src/server/agent/conversation-runtime.ts tests/agent/memory-store.test.ts tests/api/agent-memory.test.ts`, then `git commit -m "feat: persist scoped accountant memory"`.
+- [x] **Step 1: Test explicit save/update/forget and cross-tenant isolation.** Assert a remembered display preference is reused in a later conversation, user correction changes it, forget removes it, and a financial policy/tax claim cannot be stored as an approved rule through the memory tool.
+- [x] **Step 2: Run focused tests and confirm failure.**
+- [x] **Step 3: Add conversation identifiers and Prisma-backed memory models with unique, scoped lookups.** Preserve existing history where safe; do not delete or rewrite old messages as part of migration.
+- [x] **Step 4: Add authenticated list/update/delete APIs and explicit “remember this” UX/action.** The server derives account/operator identity; the model can suggest a memory but cannot persist it without explicit user intent.
+- [x] **Step 5: Run API/database tests including cross-account access and ensure redaction/retention rules apply.**
+- [x] **Step 6: Commit conversation and memory support.** Run `git add prisma/schema.prisma src/server/agent/memory-store.ts src/app/api/agent/memory/route.ts src/app/api/agent/chat/route.ts src/server/agent/conversation-runtime.ts tests/agent/memory-store.test.ts tests/api/agent-memory.test.ts`, then `git commit -m "feat: persist scoped accountant memory"`.
 
 ## Task 6: Decimal-safe accounting contracts and Odoo mapping
 

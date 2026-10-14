@@ -20,6 +20,8 @@ const EXPECTED_MODELS = [
   'runtimeApproval',
   'runtimeTaskEvent',
   'runtimeIdempotencyRecord',
+  'agentConversation',
+  'agentMemory',
 ] as const
 
 function isStale(client: PrismaClient): boolean {

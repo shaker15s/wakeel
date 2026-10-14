@@ -1,10 +1,12 @@
 import { z } from 'zod'
+import { randomUUID } from 'node:crypto'
 import { db } from '@/lib/db'
 import { handleRoute, jsonError, jsonOk } from '@/lib/wakeel/http'
 import { requireOwnedOperator } from '@/lib/auth'
 import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
 import { AgentRuntime } from '@/server/agent/runtime'
 import { Odoo19Connector } from '@/server/erp/odoo-connector'
+import { PrismaMemoryStore } from '@/server/agent/memory-store'
 
 const chatSchema = z.object({
   userId: z.string().trim().min(1, 'userId is required'),
@@ -16,6 +18,27 @@ const chatSchema = z.object({
 const AGENT_FALLBACK_REPLY =
   'Apologies — my reasoning core flickered out mid-thought. Give me a moment and ask again; in the meantime, all your systems remain under watch.'
 
+const memoryStore = new PrismaMemoryStore(db)
+
+function getConversation(tenantId: string, actorId: string) {
+  return db.agentConversation.upsert({
+    where: { tenantId_actorId: { tenantId, actorId } },
+    create: { id: randomUUID(), tenantId, actorId, title: 'Accounting workspace' },
+    update: {},
+  })
+}
+
+function conversationMessageScope(userId: string, tenantId: string, conversationId: string) {
+  return {
+    userId,
+    OR: [
+      { tenantId, conversationId },
+      // Preserve this operator's pre-conversation history without reassigning it.
+      { tenantId: null, conversationId: null },
+    ],
+  }
+}
+
 /** GET /api/agent/chat?userId= — conversation history, last 50, ascending (owner-only). */
 export async function GET(req: Request) {
   return handleRoute(async () => {
@@ -25,13 +48,15 @@ export async function GET(req: Request) {
     const guard = await requireOwnedOperator(req, userId)
     if (!guard.ok) return guard.res
 
+    const conversation = await getConversation(guard.account.id, guard.user.id)
+
     const messages = await db.chatMessage.findMany({
-      where: { userId },
+      where: conversationMessageScope(guard.user.id, guard.account.id, conversation.id),
       orderBy: { createdAt: 'desc' },
       take: 50,
     })
     messages.reverse() // ascending for chat rendering
-    return jsonOk({ messages })
+    return jsonOk({ messages, conversationId: conversation.id })
   })
 }
 
@@ -53,13 +78,16 @@ export async function POST(req: Request) {
 
     const user = guard.user
 
+    const conversation = await getConversation(guard.account.id, guard.user.id)
+
     // Last 10 messages (ascending) become the conversation so far.
     const history = await db.chatMessage.findMany({
-      where: { userId },
+      where: conversationMessageScope(guard.user.id, guard.account.id, conversation.id),
       orderBy: { createdAt: 'desc' },
       take: 10,
     })
     history.reverse()
+    const memories = await memoryStore.list(guard.account.id, guard.user.id)
 
     // NOTE (milestone-0 fix, 2026-10-04): this route previously failed to parse —
     // a partial edit had pasted the ERP-connector-loading block below *inside* the
@@ -95,7 +123,9 @@ export async function POST(req: Request) {
     }
 
     // Save the user's message
-    await db.chatMessage.create({ data: { userId, role: 'USER', content: message } });
+    await db.chatMessage.create({
+      data: { userId: guard.user.id, tenantId: guard.account.id, conversationId: conversation.id, role: 'USER', content: message },
+    });
 
     // Execute through AgentRuntime
     const runtimeResult = await AgentRuntime.run(
@@ -110,12 +140,16 @@ export async function POST(req: Request) {
         workspaceName: user.workspace,
         lang: sessionLang,
         connector,
+        conversationId: conversation.id,
+        memories,
       }
     );
 
     const agentMessage = await db.chatMessage.create({
       data: {
-        userId,
+        userId: guard.user.id,
+        tenantId: guard.account.id,
+        conversationId: conversation.id,
         role: 'AGENT',
         content: runtimeResult.reply || AGENT_FALLBACK_REPLY,
       },
@@ -123,7 +157,7 @@ export async function POST(req: Request) {
 
     await db.activity.create({
       data: {
-        userId,
+        userId: guard.user.id,
         type: 'CHAT',
         title: `Wakeel handled request for ${user.name}`,
         detail: message.slice(0, 200),
@@ -132,7 +166,7 @@ export async function POST(req: Request) {
     });
 
     const messages = await db.chatMessage.findMany({
-      where: { userId },
+      where: conversationMessageScope(guard.user.id, guard.account.id, conversation.id),
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
@@ -143,6 +177,7 @@ export async function POST(req: Request) {
         reply: agentMessage.content,
         messageId: agentMessage.id,
         messages,
+        conversationId: conversation.id,
         status: runtimeResult.status,
         toolTrace: runtimeResult.executedTools,
         taskIds: runtimeResult.taskIds,

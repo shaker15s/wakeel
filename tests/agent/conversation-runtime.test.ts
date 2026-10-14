@@ -31,6 +31,22 @@ describe('bounded accounting conversation runtime', () => {
     expect(provider.inputs[0].tools.length).toBeGreaterThan(0);
   });
 
+  it('uses explicitly saved notes only as untrusted context, never as accounting authority', async () => {
+    const provider = new QueueProvider([{ type: 'message', text: 'I will use the requested display preference.' }]);
+    await runConversationTurn({
+      tenantId: 'tenant-a', actorId: 'operator-a', conversationId: 'conversation-a',
+      userMessage: 'Prepare the report.', lang: 'en', provider, connector: null,
+      memories: [{
+        id: 'memory-1', tenantId: 'tenant-a', actorId: 'operator-a', key: 'report_language', value: 'Arabic',
+        category: 'preference', source: 'explicit_user_confirmation', confirmedBy: 'operator-a',
+        createdAt: new Date(0), updatedAt: new Date(0),
+      }],
+    });
+
+    expect(provider.inputs[0].messages[0].content).toContain('never tax rules, accounting policy');
+    expect(provider.inputs[0].messages[1]).toMatchObject({ role: 'user', content: expect.stringContaining('report_language') });
+  });
+
   it('executes a registered read tool and grounds the next answer in its result', async () => {
     const provider = new QueueProvider([
       { type: 'tool_calls', calls: [{ callId: 'call-1', name: 'get_sales_summary', arguments: { dateFrom: '2026-01-01', dateTo: '2026-01-31' } }] },

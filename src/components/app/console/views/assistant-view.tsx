@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
+  Brain,
   Bot,
   CheckCircle2,
   Database,
@@ -42,6 +43,7 @@ import { useWakeel } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 import { ConnectOdooDialog } from "@/components/app/console/connections/connect-odoo-dialog";
+import { AgentMemoryPanel } from "@/components/app/console/agent-memory-panel";
 
 function msgTime(iso: string) {
   try {
@@ -67,6 +69,7 @@ export function AssistantView() {
   const [pendingMsg, setPendingMsg] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<any>(null);
 
   // Voice State (Web Speech API)
@@ -271,6 +274,16 @@ export function AssistantView() {
         <div className="flex items-center gap-2">
           <Button
             size="sm"
+            variant="outline"
+            onClick={() => setMemoryOpen((open) => !open)}
+            aria-expanded={memoryOpen}
+            className="h-8 border-border font-mono text-[11px] hover:border-gold/40"
+          >
+            <Brain className="mr-1.5 size-3.5 text-gold" />
+            {t.memory.open}
+          </Button>
+          <Button
+            size="sm"
             onClick={() => setConnectOpen(true)}
             className="h-8 border border-gold/40 bg-gold/15 font-mono text-[11px] font-semibold text-gold hover:bg-gold/25"
           >
@@ -323,6 +336,7 @@ export function AssistantView() {
 
       {/* Connect Odoo Dialog Component */}
       <ConnectOdooDialog open={connectOpen} onOpenChange={setConnectOpen} />
+      {memoryOpen && userId ? <AgentMemoryPanel userId={userId} onClose={() => setMemoryOpen(false)} /> : null}
 
       {/* Main Friendly Chat Container */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
