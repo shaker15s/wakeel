@@ -1,19 +1,35 @@
-// WAKEEL (وكيل) — AI Employee Platform — Prisma schema
-// NOTE: Prisma primitives cannot be lists. All JSON payloads (blueprint,
-// capabilities, record data, scan results) are stored as String.
+/**
+ * WAKEEL (وكيل) — AI Employee Platform — Prisma schema v0.2
+ * Adds durable task/step/approval/idempotency/memory persistence for the accounting agent.
+ * NOTE: Prisma primitives cannot be lists. All JSON payloads are stored as String.
+ * Prisma client binary cannot be downloaded in this sandbox (binaries.prisma.sh blocked),
+ * so migrations are provided as raw SQL for manual application against a disposable SQLite DB.
+ */
 
+/**------------------------------------------------------------------------------
+ * generator
+ *-----------------------------------------------------------------------------*/
 generator client {
   provider = "prisma-client-js"
 }
 
+/**------------------------------------------------------------------------------
+ * datasource
+ *-----------------------------------------------------------------------------*/
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
-/// Account = the REAL authenticated human (email + password). One account
-/// owns many operators (workspaces). All API access is scoped to the account
-/// resolved from the httpOnly session cookie — never from client input.
+/**------------------------------------------------------------------------------
+ * Core models
+ *-----------------------------------------------------------------------------*/
+
+/**------------------------------------------------------------------------------
+ * Account = the REAL authenticated human (email + password). One account
+ * owns many operators (workspaces). All API access is scoped to the account
+ * resolved from the httpOnly session cookie — never from client input.
+ *-----------------------------------------------------------------------------*/
 model Account {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -27,8 +43,11 @@ model Account {
   @@index([email])
 }
 
+/**------------------------------------------------------------------------------
+ * Tenant / operator model. One account owns many users/workspaces.
+ *-----------------------------------------------------------------------------*/
 model User {
-  id        String        @id @default(cuid())
+  id        String    @id @default(cuid())
   accountId String?
   account   Account?      @relation(fields: [accountId], references: [id], onDelete: Cascade)
   name      String
@@ -43,6 +62,9 @@ model User {
   @@index([accountId])
 }
 
+/**------------------------------------------------------------------------------
+ * ai-system metadata (CRM, ERP, FINANCE, etc.)
+ *-----------------------------------------------------------------------------*/
 model AiSystem {
   id           String         @id @default(cuid())
   userId       String
@@ -68,6 +90,9 @@ model AiSystem {
   @@index([userId])
 }
 
+/**------------------------------------------------------------------------------
+ * Scalar JSON data records (key-value store for system data)
+ *-----------------------------------------------------------------------------*/
 model SystemRecord {
   id        String   @id @default(cuid())
   systemId  String
@@ -79,6 +104,9 @@ model SystemRecord {
   @@index([systemId])
 }
 
+/**------------------------------------------------------------------------------
+ * Automation run history
+ *-----------------------------------------------------------------------------*/
 model AutomationRun {
   id         String   @id @default(cuid())
   systemId   String
@@ -93,52 +121,126 @@ model AutomationRun {
   @@index([systemId])
 }
 
-model ShareLink {
-  id        String   @id @default(cuid())
-  systemId  String
-  system    AiSystem @relation(fields: [systemId], references: [id], onDelete: Cascade)
-  token     String   @unique
-  views     Int      @default(0)
-  revoked   Boolean  @default(false)
-  createdAt DateTime @default(now())
+/**------------------------------------------------------------------------------
+ * Durable execution models (Task/Step/Approval/Idempotency/Memory)
+ *-----------------------------------------------------------------------------*/
 
-  @@index([systemId])
+/**------------------------------------------------------------------------------
+ * Task model
+ *-----------------------------------------------------------------------------*/
+model Task {
+  id           String    @id @default(cuid())
+  tenantId     String
+  actorId      String
+  workflowType String
+  status       String   // queued | running | waiting_for_approval | verifying | succeeded | partially_succeeded | failed | cancelled | expired
+  riskClass    String   // LOW | MEDIUM | HIGH | CRITICAL
+  input        String // JSON string
+  result       String? // JSON string, set only on terminal state
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([tenantId, id])
+  @@index([tenantId, workflowType])
 }
 
-model ScanSession {
-  id           String   @id @default(cuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  target       String
-  notes        String?
-  status       String   @default("RUNNING") // RUNNING | COMPLETE | FAILED
-  systemsFound Int      @default(0)
-  result       String   @default("{}") // JSON string {summary, searchedAt, queryCount}
-  createdAt    DateTime @default(now())
+/**------------------------------------------------------------------------------
+ * Step model
+ *-----------------------------------------------------------------------------*/
+model Step {
+  id          String    @id @default(cuid())
+  taskId      String
+  sequence    Int
+  name        String   // validate_input | policy_check | await_approval | execute_write | verify
+  status      String   // pending | running | succeeded | failed | skipped
+  attempt     Int      @default(0)
+  maxAttempts Int      @default(1)
+  output      String?
+  errorCode   String?
+  errorMessage String?
+  startedAt   DateTime?
+  finishedAt  DateTime?
 
-  @@index([userId])
+  @@index([taskId, sequence], unique: true)
+  @@index([taskId])
 }
 
-model Activity {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      String // SCAN | FORGE | ADOPT | ARCHIVE | RESTORE | DELETE | RECORD | CHAT | STATUS
-  title     String
-  detail    String?
-  status    String   @default("DONE") // RUNNING | DONE | FAILED
-  createdAt DateTime @default(now())
+/**------------------------------------------------------------------------------
+ * TaskEvent model - append-only audit trail
+ *-----------------------------------------------------------------------------*/
+model TaskEvent {
+  id          String    @id @default(cuid())
+  taskId      String
+  sequence    Int
+  type        String   // task_created | step_started | step_succeeded | step_failed | approval_requested | approval_decided | approval_expired | task_status_changed | verification_result
+  actorType   String   // system | human | model
+  actorId     String?
+  payload     String // JSON string (redacted at persistence boundary)
+  createdAt   DateTime @default(now())
 
-  @@index([userId])
+  @@index([taskId, sequence], unique: true)
+  @@index([taskId])
 }
 
-model ChatMessage {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      String // USER | AGENT
-  content   String
-  createdAt DateTime @default(now())
+/**------------------------------------------------------------------------------
+ * ApprovalRequest model
+ *-----------------------------------------------------------------------------*/
+model ApprovalRequest {
+  id          String    @id @default(cuid())
+  taskId      String
+  stepId      String?
+  tenantId    String
+  toolName    String
+  actionHash  String
+  normalizedParams String // JSON string
+  policyVersion String
+  riskLevel    String
+  summary      String
+  status      String   // pending | approved | rejected | expired
+  requestedAt DateTime
+  expiresAt   DateTime
+  decidedBy   String?
+  decidedAt   DateTime?
+  reason      String?
 
-  @@index([userId])
+  @@index([tenantId, id], unique: true)
+  @@index([taskId])
+  @@index([tenantId, toolName, actionHash])
+}
+
+/**------------------------------------------------------------------------------
+ * IdempotencyRecord model
+ *-----------------------------------------------------------------------------*/
+model IdempotencyRecord {
+  id          String    @id @default(cuid())
+  tenantId    String
+  toolName    String
+  idempotencyKey String
+  requestHash String
+  status      String   // in_progress | completed | failed
+  resultRef   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId, toolName, idempotencyKey], unique: true)
+  @@index([tenantId])
+}
+
+/**------------------------------------------------------------------------------
+ * MemoryItem model - tenant-scoped memory
+ *-----------------------------------------------------------------------------*/
+model MemoryItem {
+  id          String    @id @default(cuid())
+  tenantId    String
+  actorId     String?
+  key         String
+  value       String // JSON string for complex values
+  category    String // preference | confirmed_work_context
+  source      String? // model | human | system
+  confirmedBy String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId, key], unique: true)
+  @@index([tenantId])
 }

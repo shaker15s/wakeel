@@ -50,13 +50,12 @@ describe('Agent evaluation suite — policy + tool registry', () => {
     expect(salesTool?.category).toBe('READ');
   });
 
-  it('KNOWN GAP (tracked, not yet fixed): an unrecognized write-ish tool name is allowed with no approval by default', () => {
-    // PolicyEngine.evaluate() falls through to { allowed: true, requiresApproval: false }
-    // for any toolName it does not explicitly recognize (src/server/policy/engine.ts).
-    // This is documented in docs/implementation/00-repo-audit.md §5.6 as an
-    // allow-by-default gap that should become deny-by-default in a future
-    // milestone. This test pins the CURRENT (unsafe) behavior so a future fix
-    // is a deliberate, visible change to this assertion, not a silent flip.
+  it('unrecognized tool names are denied by default (gap closed)', () => {
+    // This test previously documented a deny-by-default gap (allow-by-default for
+    // unrecognized tools). The policy engine now denies unrecognized tools by default
+    // (see PolicyEngine.evaluate() in src/server/policy/engine.ts). This assertion
+    // verifies the fix is in place and visible; a future revert would require an
+    // explicit policy change.
     const decision = PolicyEngine.evaluate({
       toolName: 'some_brand_new_tool_nobody_added_a_policy_branch_for',
       category: 'DRAFT_WRITE',
@@ -64,7 +63,9 @@ describe('Agent evaluation suite — policy + tool registry', () => {
       operatorId: 'test-operator',
     });
 
-    expect(decision.allowed).toBe(true);
+    expect(decision.allowed).toBe(false);
     expect(decision.requiresApproval).toBe(false);
+    expect(decision.riskLevel).toBe('LOW');
+    expect(decision.reason).toContain('not recognized');
   });
 });

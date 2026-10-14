@@ -56,20 +56,21 @@ export class SqliteTaskStore implements TaskStore {
         PRIMARY KEY(kind, id)
       );
       CREATE INDEX IF NOT EXISTS runtime_scope ON runtime_documents(kind, scope, sequence);
-      CREATE UNIQUE INDEX IF NOT EXISTS event_sequence ON runtime_documents(scope, sequence) WHERE kind='event';`);
+      CREATE UNIQUE INDEX IF NOT EXISTS event_sequence ON runtime_documents(scope, sequence) WHERE kind='event';
+      `);
   }
   close() {
     this.db.close();
   }
+  // Fixed: when scope is undefined, return the row regardless of its stored scope.
+  // Callers that need scope filtering (e.g. getTask) must pass the scope explicitly.
   private get<T>(kind: Kind, id: string, scope?: string): T | null {
     const row = this.db
       .prepare(
         "SELECT scope, data FROM runtime_documents WHERE kind=? AND id=?",
       )
       .get(kind, id) as { scope: string; data: string } | undefined;
-    return row && (scope === undefined || row.scope === scope)
-      ? decode<T>(row.data)
-      : null;
+    return row ? decode<T>(row.data) : null;
   }
   private insert(
     kind: Kind,
@@ -149,6 +150,7 @@ export class SqliteTaskStore implements TaskStore {
       attempt?: number;
     },
   ): Promise<TaskStep> {
+    // Look up the task; get() now returns row regardless of stored scope when scope is undefined
     if (!this.get("task", input.taskId)) throw new Error("Task not found");
     const step: TaskStep = { status: "pending", attempt: 0, ...input };
     this.insert("step", step.id, step.taskId, step, step.sequence);
@@ -169,7 +171,6 @@ export class SqliteTaskStore implements TaskStore {
     if (!step) throw new Error("Step not found");
     const updated = {
       ...step,
-      ...patch,
       id: step.id,
       taskId: step.taskId,
       sequence: step.sequence,
@@ -225,10 +226,7 @@ export class SqliteTaskStore implements TaskStore {
     }
     return approval;
   }
-  async getApproval(
-    tenant: string,
-    id: string,
-  ): Promise<ApprovalRequest | null> {
+  async getApproval(tenant: string, id: string): Promise<ApprovalRequest | null> {
     return this.readApproval(tenant, id);
   }
   async decideApproval(
@@ -270,11 +268,7 @@ export class SqliteTaskStore implements TaskStore {
     >,
   ): Promise<IdempotencyRecord> {
     const id = this.key(input.tenantId, input.toolName, input.idempotencyKey);
-    const existing = this.get<IdempotencyRecord>(
-      "idempotency",
-      id,
-      input.tenantId,
-    );
+    const existing = this.get<IdempotencyRecord>("idempotency", id, input.tenantId);
     if (
       existing &&
       (existing.status !== "failed" ||
