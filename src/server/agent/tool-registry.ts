@@ -3,7 +3,7 @@ import type { IERPConnector, ERPConnectionStatus, ExecutionResult } from '../erp
 import { PolicyEngine } from '../policy/engine';
 
 export type FinanceRiskClass = 'READ' | 'DRAFT_WRITE' | 'FINANCIAL_COMMIT' | 'DESTRUCTIVE';
-export type FinanceCapability = keyof ERPConnectionStatus['permissions'];
+export type FinanceCapability = Exclude<keyof ERPConnectionStatus['permissions'], 'rawPermissions'>;
 
 export interface FinanceToolContext {
   /** Connector and permissions are resolved by trusted server code, never model input. */

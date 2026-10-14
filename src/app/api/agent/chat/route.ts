@@ -143,7 +143,10 @@ export async function POST(req: Request) {
         reply: agentMessage.content,
         messageId: agentMessage.id,
         messages,
-        approvalCard: runtimeResult.approvalCard,
+        status: runtimeResult.status,
+        toolTrace: runtimeResult.executedTools,
+        taskIds: runtimeResult.taskIds,
+        evidence: runtimeResult.evidence,
       },
       201
     );
