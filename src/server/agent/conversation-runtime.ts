@@ -1,4 +1,4 @@
-import { executeFinanceTool, type FinanceToolContext, type ToolExecutionResult } from './tool-registry';
+import { executeFinanceTool, financeToolCapabilities, type FinanceToolContext, type ToolExecutionResult } from './tool-registry';
 import { createDefaultModelProvider, financeModelTools, type ModelMessage, type ModelProvider } from './model-provider';
 import type { IERPConnector } from '../erp/contract';
 import type { MemoryItem } from './memory-store';
@@ -59,7 +59,6 @@ function genericFailure(lang: 'ar' | 'en'): ConversationTurnResult {
 
 export async function runConversationTurn(input: ConversationTurnInput): Promise<ConversationTurnResult> {
   const provider = input.provider ?? createDefaultModelProvider();
-  const tools = input.connector ? financeModelTools() : [];
   const messages: ModelMessage[] = [
     { role: 'system', content: systemPrompt(input) },
     ...(input.history ?? []).map((message) => ({ ...message })),
@@ -77,20 +76,21 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   const taskIds: string[] = [];
   let durableApprovalRequired = false;
 
-  let financeContext: FinanceToolContext | null = null;
+  let financeContext: FinanceToolContext | null = { operatorId: input.actorId, capabilities: financeToolCapabilities(null) };
 
   try {
     if (input.connector) {
       const connection = await input.connector.testConnection();
       if (connection.healthy && connection.authenticated) {
-        financeContext = { connector: input.connector, operatorId: input.actorId, capabilities: connection.permissions };
+        financeContext = { connector: input.connector, operatorId: input.actorId, capabilities: financeToolCapabilities(connection.permissions) };
       } else {
         reviewRequired = true;
       }
     }
     for (let cycle = 0; cycle < MAX_MODEL_TOOL_CYCLES; cycle += 1) {
-      const allowToolCalls = Boolean(financeContext) && toolCount < MAX_TOOLS_PER_TURN;
-      const output = await provider.completeTurn({ messages, tools: financeContext && allowToolCalls ? tools : [], allowToolCalls });
+      const availableTools = financeContext ? financeModelTools(financeContext.capabilities) : [];
+      const allowToolCalls = Boolean(financeContext && availableTools.length) && toolCount < MAX_TOOLS_PER_TURN;
+      const output = await provider.completeTurn({ messages, tools: allowToolCalls ? availableTools : [], allowToolCalls });
       if (output.type === 'message') {
         if (approvalRequired) {
           if (durableApprovalRequired && taskIds.length > 0) {

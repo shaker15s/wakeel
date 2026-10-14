@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FakeERPConnector } from '@/server/erp/fake-connector';
 import { ERP_TOOLS } from '@/server/agent/tools';
-import { executeFinanceTool, FINANCE_TOOLS, resolveFinanceTool } from '@/server/agent/tool-registry';
+import { executeFinanceTool, financeToolCapabilities, FINANCE_TOOLS, resolveFinanceTool } from '@/server/agent/tool-registry';
 import type { FinanceToolContext } from '@/server/agent/tool-registry';
 
 const createContext = (connector = new FakeERPConnector(), overrides: Partial<FinanceToolContext> = {}) => ({
@@ -113,5 +113,52 @@ describe('finance tool registry', () => {
     });
     expect(result.status).toBe('approval_required');
     expect(write).not.toHaveBeenCalled();
+  });
+
+  it('exposes deterministic accounting calculators without granting ERP read capabilities', async () => {
+    const capabilities = financeToolCapabilities(null);
+    expect(capabilities.canCalculateAccounting).toBe(true);
+    expect(capabilities.canReadAccounting).toBe(false);
+    const names = FINANCE_TOOLS.filter((tool) => capabilities[tool.requiredCapability]).map((tool) => tool.name);
+    expect(names).toContain('calculate_budget_variance');
+    expect(names).not.toContain('get_trial_balance');
+
+    const result = await executeFinanceTool({ operatorId: 'operator-1', capabilities }, 'calculate_budget_variance', {
+      period: '2026-09', actual: { amount: '120.00', currency: 'EGP', scale: 2 }, budget: { amount: '100.00', currency: 'EGP', scale: 2 },
+    });
+    expect(result).toMatchObject({ status: 'succeeded', data: { data: { status: 'over_budget', variance: { amount: '20.00', currency: 'EGP' } } } });
+    if (result.status === 'succeeded') expect(result.evidence[0].provider).toBe('local_calculation');
+  });
+
+  it('keeps journal preparation a balanced proposal and never posts it', async () => {
+    const result = await executeFinanceTool({ operatorId: 'operator-1', capabilities: { canCalculateAccounting: true } }, 'prepare_journal_entry_proposal', {
+      date: '2026-09-30', currency: 'EGP', description: 'Accrual',
+      lines: [
+        { accountId: 'expense', debit: { amount: '50.00', currency: 'EGP', scale: 2 }, credit: { amount: '0.00', currency: 'EGP', scale: 2 } },
+        { accountId: 'accrual', debit: { amount: '0.00', currency: 'EGP', scale: 2 }, credit: { amount: '50.00', currency: 'EGP', scale: 2 } },
+      ],
+    });
+    expect(result).toMatchObject({ status: 'review_required' });
+  });
+
+  it('uses the connector chart instead of model-supplied account authorization for journal proposals', async () => {
+    const connector = new FakeERPConnector();
+    const chart = vi.spyOn(connector, 'getChartOfAccounts');
+    const result = await executeFinanceTool(createContext(connector), 'prepare_journal_entry_proposal', {
+      date: '2026-09-30', currency: 'EGP', description: 'Accrual',
+      lines: [
+        { accountId: 'expense-egp', debit: { amount: '50.00', currency: 'EGP', scale: 2 }, credit: { amount: '0.00', currency: 'EGP', scale: 2 } },
+        { accountId: 'payable-egp', debit: { amount: '0.00', currency: 'EGP', scale: 2 }, credit: { amount: '50.00', currency: 'EGP', scale: 2 } },
+      ],
+    });
+    expect(chart).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({ status: 'succeeded', data: { data: { status: 'draft', posted: false } } });
+  });
+
+  it('never invents expense policy or tax treatment when company policy is unavailable', async () => {
+    const result = await executeFinanceTool({ operatorId: 'operator-1', capabilities: { canCalculateAccounting: true } }, 'assess_expense', {
+      date: '2026-09-30', amount: { amount: '50.00', currency: 'EGP', scale: 2 }, description: 'Taxi', category: 'travel', receiptPresent: true,
+    });
+    expect(result).toMatchObject({ status: 'succeeded', data: { data: { status: 'review_required', reasons: ['expense_policy_missing'], taxTreatment: { status: 'review_required' } } } });
   });
 });

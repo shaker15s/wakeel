@@ -282,7 +282,7 @@ export function StatusBar() {
           <span className="hidden lg:inline">{t.sb.agentDock}</span>
         </Button>
 
-        <LangToggle className="hidden sm:flex" />
+        <LangToggle />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

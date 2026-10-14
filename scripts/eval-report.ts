@@ -58,6 +58,8 @@ async function main() {
 
   const report = `# WAKEEL — Agent Evaluation Report
 
+> Historical customer-invoice runtime scenarios only. This is not the full accounting evaluation. The separate 47-case synthetic accounting suite and current capability limits are documented in [06-accounting-agent-report.md](06-accounting-agent-report.md).
+
 **Suite version:** \`${SUITE_VERSION}\` (src/server/eval/scenarios.ts)
 **Generated:** ${generatedAt} · Node ${nodeVersion}
 **Generator:** \`npm run eval:report\` → \`scripts/eval-report.ts\`
@@ -70,18 +72,14 @@ async function main() {
 
 ## Scope and what this is NOT
 
-- Workflow under test: \`create_draft_invoice\` only (the one vertical slice implemented —
-  see docs/implementation/01-mvp-decision.md). No other workflow exists yet to evaluate.
+- Workflow under test: legacy customer-invoice task executor only. Supplier-bill, financial-read, and accounting-calculation tests are outside this legacy harness; see the current accounting report.
 - Connector: \`FakeERPConnector\` (deterministic, in-memory). **No real Odoo instance, no
   network call, no paid API of any kind is used anywhere in this suite.**
-- Model/agent: none. Inputs are structured JSON (as if already extracted/validated),
-  not free text an LLM interprets. There is no model-in-the-loop in this slice yet.
+- Model/agent: none in this executor harness. The live chat has a separate model-in-the-loop runtime; this report does not evaluate it.
 - **Sample size is ${total} scenarios.** This is evidence about these ${total} specific,
   hand-authored cases, not a statistical safety claim about the runtime in general.
 - Explicitly NOT covered by this suite (do not interpret their absence as "passing"):
-  - **Prompt injection in untrusted document/tool output** — there is no model or
-    untrusted-document ingestion path in this slice to attack. Deferred in
-    docs/implementation/03-milestone-1-report.md.
+  - **Prompt injection in untrusted document/tool output** — not exercised by this structured-input executor suite. Separate tool-boundary tests cover selected user-text and bill-field injection cases.
   - **Live-provider experiments / real cost measurement** — no real model or ERP API is
     called anywhere here by design (rule: deterministic fakes only, no unsafe autonomous
     writes). Cost is reported as N/A below, not zero.

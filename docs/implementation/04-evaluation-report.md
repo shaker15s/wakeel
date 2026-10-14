@@ -1,7 +1,9 @@
 # WAKEEL — Agent Evaluation Report
 
-**Suite version:** `2026-10-04.1` (src/server/eval/scenarios.ts)
-**Generated:** 2026-10-14T18:40:30.635Z · Node v24.14.1
+> Historical customer-invoice runtime scenarios only. This is not the full accounting evaluation. The separate 47-case synthetic accounting suite and current capability limits are documented in [06-accounting-agent-report.md](06-accounting-agent-report.md).
+
+**Suite version:** `2026-10-14.2` (src/server/eval/scenarios.ts)
+**Generated:** 2026-10-14T20:35:28.153Z · Node v24.14.1
 **Generator:** `npm run eval:report` → `scripts/eval-report.ts`
 
 > Regenerate this file (`npm run eval:report`) any time `src/server/eval/scenarios.ts`
@@ -12,18 +14,14 @@
 
 ## Scope and what this is NOT
 
-- Workflow under test: `create_draft_invoice` only (the one vertical slice implemented —
-  see docs/implementation/01-mvp-decision.md). No other workflow exists yet to evaluate.
+- Workflow under test: legacy customer-invoice task executor only. Supplier-bill, financial-read, and accounting-calculation tests are outside this legacy harness; see the current accounting report.
 - Connector: `FakeERPConnector` (deterministic, in-memory). **No real Odoo instance, no
   network call, no paid API of any kind is used anywhere in this suite.**
-- Model/agent: none. Inputs are structured JSON (as if already extracted/validated),
-  not free text an LLM interprets. There is no model-in-the-loop in this slice yet.
+- Model/agent: none in this executor harness. The live chat has a separate model-in-the-loop runtime; this report does not evaluate it.
 - **Sample size is 16 scenarios.** This is evidence about these 16 specific,
   hand-authored cases, not a statistical safety claim about the runtime in general.
 - Explicitly NOT covered by this suite (do not interpret their absence as "passing"):
-  - **Prompt injection in untrusted document/tool output** — there is no model or
-    untrusted-document ingestion path in this slice to attack. Deferred in
-    docs/implementation/03-milestone-1-report.md.
+  - **Prompt injection in untrusted document/tool output** — not exercised by this structured-input executor suite. Separate tool-boundary tests cover selected user-text and bill-field injection cases.
   - **Live-provider experiments / real cost measurement** — no real model or ERP API is
     called anywhere here by design (rule: deterministic fakes only, no unsafe autonomous
     writes). Cost is reported as N/A below, not zero.
@@ -41,7 +39,7 @@
 | Duplicate side effects (>1 connector write in a replay/crash/retry scenario) | 0 | n=3 |
 | Review-required outcomes (partially_succeeded) | 2 | n=16 |
 | Receipt completeness (non-empty summary + evidence event when required) | 16 / 16 (100%) | n=16 |
-| Latency p50 / p95 (ms, in-process, fake connector — NOT representative of real ERP/network latency) | 1.37 / 65.34 | n=16 |
+| Latency p50 / p95 (ms, in-process, fake connector — NOT representative of real ERP/network latency) | 2.14 / 422.58 | n=16 |
 | Cost | N/A — no paid API called | n/a |
 
 **Silent wrong completion caveat:** "0 observed" means none of these 16 scenarios
@@ -53,22 +51,22 @@ assert the outcome is `partially_succeeded`, never `succeeded`).
 
 | ID | Category | Passed | Final status | Outcome | Connector writes | Events | Receipt complete | Latency (ms) | Failure reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ordinary-success-01 | ordinary_success | ✅ | succeeded | succeeded | 1 | 7 | yes | 65.34 | — |
-| missing-input-01 | missing_or_ambiguous_input | ✅ | failed | failed | 0 | 2 | yes | 1.62 | — |
-| invalid-args-01 | invalid_tool_arguments | ✅ | failed | failed | 0 | 2 | yes | 1.04 | — |
-| policy-denial-01 | policy_denial | ✅ | failed | failed | 0 | 2 | yes | 0.78 | — |
-| approval-rejected-01 | approval_rejected | ✅ | failed | failed | 0 | 4 | yes | 1.63 | — |
-| approval-expired-01 | approval_expired | ✅ | failed | failed | 0 | 4 | yes | 35.77 | — |
-| transient-recovered-01 | transient_failure_recovered | ✅ | succeeded | succeeded | 1 | 8 | yes | 2.60 | — |
-| retry-exhausted-01 | retry_budget_exhausted | ✅ | failed | failed | 0 | 7 | yes | 1.57 | — |
-| crash-after-write-01 | crash_after_side_effect | ✅ | succeeded | succeeded | 1 | 6 | yes | 1.27 | — |
-| duplicate-replay-01 | duplicate_replayed_request | ✅ | succeeded | succeeded | 1 | 8 | yes | 1.37 | — |
-| verification-mismatch-01 | verification_mismatch | ✅ | partially_succeeded | partially_succeeded | 1 | 7 | yes | 1.45 | — |
-| verification-read-failed-01 | verification_read_failed | ✅ | partially_succeeded | partially_succeeded | 1 | 7 | yes | 1.13 | — |
-| cross-tenant-01 | cross_tenant_access_denied | ✅ | waiting_for_approval | — | 0 | 2 | yes | 0.71 | — |
-| action-tampering-01 | action_tampering_blocked | ✅ | failed | failed | 0 | 4 | yes | 0.90 | — |
-| idempotency-collision-01 | idempotency_key_collision | ✅ | failed | failed | 1 | 8 | yes | 1.41 | — |
-| cancellation-01 | cancellation | ✅ | cancelled | cancelled | 0 | 3 | yes | 1.04 | — |
+| ordinary-success-01 | ordinary_success | ✅ | succeeded | succeeded | 1 | 7 | yes | 422.58 | — |
+| missing-input-01 | missing_or_ambiguous_input | ✅ | failed | failed | 0 | 2 | yes | 2.14 | — |
+| invalid-args-01 | invalid_tool_arguments | ✅ | failed | failed | 0 | 2 | yes | 1.47 | — |
+| policy-denial-01 | policy_denial | ✅ | failed | failed | 0 | 2 | yes | 1.10 | — |
+| approval-rejected-01 | approval_rejected | ✅ | failed | failed | 0 | 4 | yes | 2.04 | — |
+| approval-expired-01 | approval_expired | ✅ | failed | failed | 0 | 4 | yes | 31.69 | — |
+| transient-recovered-01 | transient_failure_recovered | ✅ | succeeded | succeeded | 1 | 8 | yes | 2.90 | — |
+| retry-exhausted-01 | retry_budget_exhausted | ✅ | failed | failed | 0 | 7 | yes | 7.44 | — |
+| crash-after-write-01 | crash_after_side_effect | ✅ | succeeded | succeeded | 1 | 6 | yes | 2.00 | — |
+| duplicate-replay-01 | duplicate_replayed_request | ✅ | succeeded | succeeded | 1 | 8 | yes | 2.68 | — |
+| verification-mismatch-01 | verification_mismatch | ✅ | partially_succeeded | partially_succeeded | 1 | 7 | yes | 3.86 | — |
+| verification-read-failed-01 | verification_read_failed | ✅ | partially_succeeded | partially_succeeded | 1 | 7 | yes | 1.60 | — |
+| cross-tenant-01 | cross_tenant_access_denied | ✅ | waiting_for_approval | — | 0 | 2 | yes | 1.47 | — |
+| action-tampering-01 | action_tampering_blocked | ✅ | failed | failed | 0 | 4 | yes | 3.95 | — |
+| idempotency-collision-01 | idempotency_key_collision | ✅ | failed | failed | 1 | 8 | yes | 2.71 | — |
+| cancellation-01 | cancellation | ✅ | cancelled | cancelled | 0 | 3 | yes | 1.42 | — |
 
 ## Result: all scenarios passed
 

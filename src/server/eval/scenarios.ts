@@ -12,21 +12,13 @@ import { Task, TaskStep } from '@/server/runtime/types';
  * a way that would make an old report non-comparable to a new one. Adding a
  * new scenario without changing existing ones does not require a bump.
  *
- * SCOPE: this suite only covers the one implemented workflow
- * (create_draft_invoice) against the deterministic FakeERPConnector — see
- * docs/implementation/03-milestone-1-report.md for why a real Odoo
- * connector and a real model provider are both out of scope right now.
- * Two Phase-4-required categories are INTENTIONALLY NOT covered here and
- * must not be reported as passing:
- *   - "prompt injection in untrusted document/tool output": there is no
- *     model-in-the-loop or untrusted document ingestion in this slice yet
- *     (inputs are structured JSON from a form, not free text an LLM reads).
- *     Explicitly deferred in docs/implementation/03-milestone-1-report.md.
- *   - "live-provider experiments" / cost measurement: no paid model or ERP
- *     API is called anywhere in this suite, by design (rule: no unsafe
- *     autonomous writes, deterministic fakes only). Cost is reported as N/A.
+ * SCOPE: the scenarios below remain an executor-only compatibility suite for
+ * customer invoices on FakeERPConnector. The broader 47-case accounting
+ * calculation cases live in tests/agent/business-owner-scenarios.test.ts and
+ * are reported separately in docs/implementation/06-accounting-agent-report.md.
+ * This suite does not evaluate live model response quality or live Odoo access.
  */
-export const SUITE_VERSION = '2026-10-04.1';
+export const SUITE_VERSION = '2026-10-14.2';
 
 export type ScenarioCategory =
   | 'ordinary_success'

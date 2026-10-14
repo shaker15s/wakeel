@@ -12,13 +12,13 @@ describe('KiosAPI OpenAI-compatible provider', () => {
       init = options;
       return Response.json({ choices: [{ message: { role: 'assistant', content: 'Here is the summary.' } }] });
     });
-    const provider = new KiosApiModelProvider({ baseUrl: 'https://kiosapi.com/v1/', apiKey: 'test-secret', model: 'deepseek-v4-flash-0731-free' }, fetcher as typeof fetch);
+    const provider = new KiosApiModelProvider({ baseUrl: 'https://kiosapi.com/v1/', apiKey: 'test-secret', model: 'deepseek-v4-flash-free' }, fetcher as typeof fetch);
 
     await expect(provider.completeTurn(input)).resolves.toEqual({ type: 'message', text: 'Here is the summary.' });
     expect(requestUrl).toBe('https://kiosapi.com/v1/chat/completions');
     expect(new Headers(init?.headers).get('authorization')).toBe('Bearer test-secret');
     const body = JSON.parse(String(init?.body));
-    expect(body.model).toBe('deepseek-v4-flash-0731-free');
+    expect(body.model).toBe('deepseek-v4-flash-free');
     expect(body.tools.map((tool: { function: { name: string } }) => tool.function.name)).toEqual(expect.arrayContaining(['get_sales_summary', 'search_customers']));
     expect(body.parallel_tool_calls).toBe(false);
   });

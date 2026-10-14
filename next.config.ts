@@ -63,21 +63,6 @@ const nextConfig: NextConfig = {
       { source: "/(.*)", headers: securityHeaders },
     ];
   },
-  /**
-   * TEMPORARY, sandbox-only: this environment's Prisma client cannot be
-   * generated (no network access to binaries.prisma.sh — see
-   * docs/implementation/00-repo-audit.md), so the real authenticated
-   * console at "/" cannot boot (every DB-backed API route 500s). Rather
-   * than land visitors on a page that silently does nothing, send them
-   * straight to the live runtime demo, which needs neither Prisma nor a
-   * real Odoo instance. Remove this redirect once a working database is
-   * available (e.g. outside this sandbox) and the real console can boot.
-   */
-  async redirects() {
-    return [
-      { source: "/", destination: "/demo/invoice", permanent: false },
-    ];
-  },
 };
 
 export default nextConfig;

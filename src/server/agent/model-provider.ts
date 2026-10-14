@@ -44,8 +44,8 @@ function parseArguments(value: string): unknown {
   }
 }
 
-export function financeModelTools(): ModelTool[] {
-  return FINANCE_TOOLS.map((tool) => ({
+export function financeModelTools(capabilities?: Partial<Record<import('./tool-registry').FinanceCapability, boolean>>): ModelTool[] {
+  return FINANCE_TOOLS.filter((tool) => !capabilities || capabilities[tool.requiredCapability] === true).map((tool) => ({
     name: tool.name,
     description: tool.description,
     parameters: z.toJSONSchema(tool.inputSchema) as Record<string, unknown>,
@@ -63,7 +63,7 @@ export class KiosApiModelProvider implements ModelProvider {
     if (!apiKey?.trim()) throw new Error('KiosAPI is not configured.');
 
     const baseUrl = (this.config.baseUrl ?? process.env.KIOSAPI_BASE_URL ?? 'https://kiosapi.com/v1').replace(/\/+$/, '');
-    const model = this.config.model ?? process.env.WAKEEL_MODEL ?? 'deepseek-v4-flash-0731-free';
+    const model = this.config.model ?? process.env.WAKEEL_MODEL ?? 'deepseek-v4-flash-free';
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs ?? 45_000);
 

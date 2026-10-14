@@ -1,28 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
   Brain,
   Bot,
-  CheckCircle2,
   Database,
-  Hammer,
-  Loader2,
   Mic,
   MicOff,
   Plus,
-  Radar,
   RefreshCw,
   Send,
-  ShieldCheck,
   Sparkles,
   Volume2,
   VolumeX,
-  Wrench,
-  Zap,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { WakeelMark } from "@/components/app/logo";
@@ -30,12 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MonoLabel } from "@/components/app/motion-bits";
 import {
-  forgeSystem,
-  generateDigest,
   getChat,
-  getSystems,
-  runScan,
-  seedSystem,
   sendChat,
 } from "@/lib/api-client";
 import { useT } from "@/lib/i18n";
@@ -62,17 +51,14 @@ export function AssistantView() {
   const lang = useWakeel((s) => s.lang);
   const userId = useWakeel((s) => s.userId);
   const userSession = useWakeel((s) => s.session);
-  const setConsoleTab = useWakeel((s) => s.setConsoleTab);
   const queryClient = useQueryClient();
   const listRef = useRef<HTMLDivElement>(null);
 
   const [draft, setDraft] = useState("");
   const [pendingMsg, setPendingMsg] = useState<string | null>(null);
-  const [activeAction, setActiveAction] = useState<string | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const [pendingApproval, setPendingApproval] = useState<any>(null);
 
   // Voice State (Web Speech API)
   const [isListening, setIsListening] = useState(false);
@@ -86,14 +72,7 @@ export function AssistantView() {
     refetchInterval: 15_000,
   });
 
-  const { data: systemsData } = useQuery({
-    queryKey: ["systems", userId],
-    queryFn: () => getSystems(userId!),
-    enabled: !!userId,
-  });
-
   const messages = chatData?.messages ?? [];
-  const systems = useMemo(() => systemsData?.systems ?? [], [systemsData]);
 
   // Speech Recognition Setup
   useEffect(() => {
@@ -164,12 +143,7 @@ export function AssistantView() {
     onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ["chat", userId] });
       queryClient.invalidateQueries({ queryKey: ["activity", userId] });
-      queryClient.invalidateQueries({ queryKey: ["systems", userId] });
       setPendingMsg(null);
-      setActiveAction(null);
-      if (res.approvalCard) {
-        setPendingApproval(res.approvalCard);
-      }
       if (res.taskIds?.length) setActiveTaskId(res.taskIds[0]);
       if (autoSpeak && res.reply) {
         speakText(res.reply);
@@ -177,41 +151,7 @@ export function AssistantView() {
     },
     onError: (err: Error) => {
       setPendingMsg(null);
-      setActiveAction(null);
       toast.error(t.dock.toastErr, { description: err.message });
-    },
-  });
-
-  // Approval Execution Mutation
-  const approvalMutation = useMutation({
-    mutationFn: async ({ confirmed }: { confirmed: boolean }) => {
-      const res = await fetch("/api/agent/execute-approval", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          toolName: "create_draft_invoice",
-          parameters: pendingApproval?.mutationPayload || {},
-          confirmed,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Execution failed");
-      return data;
-    },
-    onSuccess: (res, variables) => {
-      setPendingApproval(null);
-      queryClient.invalidateQueries({ queryKey: ["chat", userId] });
-      queryClient.invalidateQueries({ queryKey: ["activity", userId] });
-      if (variables.confirmed) {
-        toast.success(lang === "ar" ? "تم إنشاء المسودة بنجاح في Odoo!" : "Draft created successfully in Odoo!");
-        send(lang === "ar" ? "تم تأكيد واعتماد الإجراء، اعرض لي رقم الفاتورة المنشأة" : "Action approved, show me the created invoice");
-      } else {
-        toast.info(lang === "ar" ? "تم إلغاء الإجراء" : "Action cancelled");
-      }
-    },
-    onError: (err: Error) => {
-      toast.error(err.message);
     },
   });
 
@@ -221,22 +161,6 @@ export function AssistantView() {
     setDraft("");
     setPendingMsg(trimmed);
     chatMutation.mutate(trimmed);
-  };
-
-  // Built-in Tools
-  const executeTool = async (type: string, payload: any) => {
-    setActiveAction(type);
-    try {
-      if (type === "scan") {
-        send(lang === "ar" ? `قم باكتشاف الأنظمة لشركة: ${payload}` : `Discover systems for: ${payload}`);
-      } else if (type === "forge") {
-        send(lang === "ar" ? `أنشئ لي نظام: ${payload}` : `Forge a new system for: ${payload}`);
-      } else if (type === "digest") {
-        send(lang === "ar" ? `لخص لي حالة جميع أنظمة الشركة` : `Give me a full business health summary`);
-      }
-    } catch {
-      setActiveAction(null);
-    }
   };
 
   // Auto Scroll
@@ -257,16 +181,14 @@ export function AssistantView() {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="font-display text-base font-bold text-foreground">
-                {lang === "ar" ? "وكيلك الذكي (الموظف التشغيلي)" : "Your AI Employee (Wakeel)"}
+                {t.acct.title}
               </h2>
               <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-gold">
-                {lang === "ar" ? "طبقة التشغيل" : "ERP / CRM Layer"}
+                {t.acct.badge}
               </span>
             </div>
             <p className="text-xs text-muted-foreground">
-              {lang === "ar"
-                ? `متصل بـ ${systems.length} أنظمة | الذاكرة نشطة ومحدثة`
-                : `Connected to ${systems.length} systems | Memory active`}
+              {t.acct.context}
             </p>
           </div>
         </div>
@@ -289,38 +211,18 @@ export function AssistantView() {
             className="h-8 border border-gold/40 bg-gold/15 font-mono text-[11px] font-semibold text-gold hover:bg-gold/25"
           >
             <Database className="mr-1.5 size-3.5" />
-            {lang === "ar" ? "ربط Odoo 19" : "Connect Odoo"}
+            {t.acct.connectErp}
           </Button>
 
           <Button
             size="sm"
             variant="outline"
-            onClick={() => executeTool("digest", null)}
+            onClick={() => send(lang === "ar" ? `أعد ملخصاً محاسبياً بالأرقام المؤكدة ومصدرها وفترتها. اسألني عن العملة أو التاريخ إذا كان ناقصاً.` : `Give me an accounting summary using verified figures, sources, and periods. Ask me for any missing currency or dates.`)}
             disabled={chatMutation.isPending}
             className="h-8 border-gold/30 font-mono text-[11px] text-gold hover:bg-gold/10"
           >
             <Sparkles className="mr-1.5 size-3.5" />
-            {lang === "ar" ? "ملخص النشاط" : "Daily Digest"}
-          </Button>
-
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setConsoleTab("discovery")}
-            className="h-8 border-border font-mono text-[11px] hover:border-gold/40"
-          >
-            <Radar className="mr-1.5 size-3.5 text-gold" />
-            {lang === "ar" ? "استكشاف الأنظمة" : "Discover Stack"}
-          </Button>
-
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setConsoleTab("forge")}
-            className="h-8 border-border font-mono text-[11px] hover:border-gold/40"
-          >
-            <Hammer className="mr-1.5 size-3.5 text-gold" />
-            {lang === "ar" ? "بناء نظام جديد" : "Forge System"}
+            {lang === "ar" ? "ملخص محاسبي" : "Accounting Summary"}
           </Button>
 
           <Button
@@ -347,7 +249,7 @@ export function AssistantView() {
           ref={listRef}
           className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
           role="log"
-          aria-label="Assistant conversation"
+          aria-label={t.acct.conversationLabel}
         >
           {chatLoading ? (
             <div className="flex flex-col gap-4">
@@ -363,13 +265,11 @@ export function AssistantView() {
               <div className="max-w-md">
                 <h3 className="font-display text-lg font-bold text-foreground">
                   {lang === "ar"
-                    ? `أهلاً بك! أنا موظفك الذكي في مساحة العمل`
-                    : `Welcome! I'm your dedicated AI operations employee`}
+                    ? t.acct.welcome
+                    : t.acct.welcome}
                 </h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {lang === "ar"
-                    ? "أنا هنا لتسهيل إدارة كل أنظمتك وسجلاتك بدون أي تعقيد. تحدث معي بالشات أو الصوت واطلب أي شيء تريده."
-                    : "I simplify your entire ERP, CRM, and tools. Chat with me by text or voice — ask anything."}
+                  {t.acct.intro}
                 </p>
               </div>
 
@@ -377,19 +277,19 @@ export function AssistantView() {
               <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {[
                   {
-                    text: lang === "ar" ? "اكتشف الأنظمة المستخدمة في شركتنا" : "Discover existing systems for my business",
-                    icon: Radar,
+                    text: t.acct.trialBalance,
+                    icon: Activity,
                   },
                   {
-                    text: lang === "ar" ? "ابنِ لي نظام إدارة مهام ومخزون بسيط" : "Forge a simple tasks and inventory system",
-                    icon: Hammer,
-                  },
-                  {
-                    text: lang === "ar" ? "ما هي السجلات والأنظمة الحالية لدي؟" : "What systems and records do I have?",
+                    text: t.acct.payables,
                     icon: Database,
                   },
                   {
-                    text: lang === "ar" ? "اعطني تقريراً بحالة العمل اليوم" : "Give me an operational summary",
+                    text: t.acct.vendorDraft,
+                    icon: ShieldCheck,
+                  },
+                  {
+                    text: t.acct.bankMatch,
                     icon: Activity,
                   },
                 ].map((action, i) => (
@@ -462,53 +362,6 @@ export function AssistantView() {
                 )}
               </AnimatePresence>
 
-              {pendingApproval && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="my-2 rounded-xl border-2 border-gold/60 bg-gold/[0.08] p-4 text-sm shadow-[0_0_25px_rgba(232,180,74,0.15)]"
-                >
-                  <div className="flex items-center gap-2 text-gold">
-                    <ShieldCheck className="size-5" />
-                    <h4 className="font-display font-bold">{pendingApproval.title}</h4>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{pendingApproval.description}</p>
-
-                  <div className="my-3 flex flex-col gap-1.5 rounded-lg border border-gold/20 bg-background/80 p-3 font-mono text-xs">
-                    {pendingApproval.details?.map((d: any, i: number) => (
-                      <div key={i} className="flex justify-between">
-                        <span className="text-muted-foreground">{d.label}:</span>
-                        <span className="font-bold text-foreground">{d.value}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => approvalMutation.mutate({ confirmed: true })}
-                      disabled={approvalMutation.isPending}
-                      className="h-9 flex-1 bg-emerald-600 font-mono text-xs font-bold text-white hover:bg-emerald-500"
-                    >
-                      {approvalMutation.isPending ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        lang === "ar" ? "✓ تأكيد واعتماد في Odoo" : "✓ Approve in Odoo"
-                      )}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => approvalMutation.mutate({ confirmed: false })}
-                      disabled={approvalMutation.isPending}
-                      className="h-9 border-border font-mono text-xs hover:border-destructive hover:text-destructive"
-                    >
-                      {lang === "ar" ? "إلغاء" : "Cancel"}
-                    </Button>
-                  </div>
-                </motion.div>
-              )}
-
               {chatMutation.isPending && (
                 <div className="flex items-center gap-2 self-start rounded-xl border border-border bg-secondary/60 px-4 py-3">
                   <div className="flex items-center gap-1">
@@ -565,8 +418,8 @@ export function AssistantView() {
                     ? "جارٍ الاستماع إليك..."
                     : "Listening to your voice..."
                   : lang === "ar"
-                  ? "اكتب أو تحدث مع وكيلك (مثال: أضف سجل عميل جديد، اعطني ملخص المبيعات)..."
-                  : "Chat or speak with Wakeel (e.g. create a system, add record, check stack)..."
+                  ? "اكتب أو تحدث مع محاسبك (مثال: أعمار الموردين، ميزان المراجعة، مسودة فاتورة)..."
+                  : "Ask your accounting employee (e.g. trial balance, overdue bills, draft invoice)…"
               }
               disabled={chatMutation.isPending}
               className="h-11 flex-1 rounded-xl border-border bg-secondary/50 px-4 text-sm focus-visible:ring-gold/50"

@@ -295,6 +295,20 @@ export const en = {
     hintKeys: "PRESS 1–6 TO SWITCH VIEWS",
   },
 
+  acct: {
+    title: "Your Accounting Employee",
+    badge: "ACCOUNTING WORKSPACE",
+    context: "Live balances require a connected, verified company ERP.",
+    welcome: "Your accounting desk is ready.",
+    intro: "Ask about verified reports, payables and receivables, or request a draft. Every financial write waits for your explicit approval.",
+    trialBalance: "Show my trial balance for January 2026 in EGP",
+    payables: "Show aged payables as of January 31, 2026 in EGP",
+    vendorDraft: "Prepare a draft supplier bill and show me the approval details first",
+    bankMatch: "Show my profit and loss statement for January 2026 in EGP",
+    conversationLabel: "Accounting conversation",
+    connectErp: "Connect accounting ERP",
+  },
+
   ov: {
     consoleTag: "OPERATOR CONSOLE",
     greetNight: "Burning the midnight oil",
@@ -1038,6 +1052,20 @@ export const ar: Dict = {
     version: "واكيل v0.1 · و",
     navLabel: "تنقل الكونسول",
     hintKeys: "اضغط 1–6 لتبديل الشاشات",
+  },
+
+  acct: {
+    title: "موظفك المحاسبي",
+    badge: "مساحة العمل المحاسبية",
+    context: "الأرصدة الحية تتطلب ربط نظام الشركة والتحقق من صلاحياته.",
+    welcome: "مكتبك المحاسبي جاهز.",
+    intro: "اسأل عن التقارير المؤكدة والموردين والعملاء، أو اطلب مسودة. كل كتابة مالية تنتظر موافقتك الصريحة.",
+    trialBalance: "اعرض ميزان المراجعة لشهر يناير 2026 بالجنيه المصري",
+    payables: "اعرض أعمار الدائنين حتى 31 يناير 2026 بالجنيه المصري",
+    vendorDraft: "جهّز مسودة فاتورة مورد واعرض تفاصيل الموافقة أولاً",
+    bankMatch: "اعرض قائمة الدخل لشهر يناير 2026 بالجنيه المصري",
+    conversationLabel: "المحادثة المحاسبية",
+    connectErp: "اربط نظام المحاسبة",
   },
 
   ov: {

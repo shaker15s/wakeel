@@ -47,6 +47,20 @@ describe('bounded accounting conversation runtime', () => {
     expect(provider.inputs[0].messages[1]).toMatchObject({ role: 'user', content: expect.stringContaining('report_language') });
   });
 
+  it('runs deterministic budget calculations without exposing live ERP tools', async () => {
+    const provider = new QueueProvider([
+      { type: 'tool_calls', calls: [{ callId: 'budget-1', name: 'calculate_budget_variance', arguments: {
+        period: '2026-09', actual: { amount: '120.00', currency: 'EGP', scale: 2 }, budget: { amount: '100.00', currency: 'EGP', scale: 2 },
+      } }] },
+      { type: 'message', text: 'The supplied actual is 20.00 EGP over the supplied budget.' },
+    ]);
+    const result = await run(provider, null);
+    expect(provider.inputs[0].tools.map((tool) => tool.name)).toContain('calculate_budget_variance');
+    expect(provider.inputs[0].tools.map((tool) => tool.name)).not.toContain('get_trial_balance');
+    expect(result).toMatchObject({ status: 'answered', toolTrace: [{ name: 'calculate_budget_variance', status: 'succeeded' }] });
+    expect(result.evidence).toMatchObject([{ provider: 'local_calculation' }]);
+  });
+
   it('executes a registered read tool and grounds the next answer in its result', async () => {
     const provider = new QueueProvider([
       { type: 'tool_calls', calls: [{ callId: 'call-1', name: 'get_sales_summary', arguments: { dateFrom: '2026-01-01', dateTo: '2026-01-31' } }] },
