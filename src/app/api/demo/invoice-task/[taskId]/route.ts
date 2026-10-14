@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { handleRoute, jsonError } from '@/lib/wakeel/http';
 import { advance } from '@/server/runtime/executor';
-import { getDemoExecutorDeps } from '@/server/runtime/demo-store';
+import { getDemoExecutorDeps, withDemoMutation } from '@/server/runtime/demo-store';
 import { readDemoTenantId } from '@/server/runtime/demo-tenant';
 import { buildTaskView } from '@/server/runtime/demo-view';
 import { FakeERPConnector, InvoiceFaultBehavior } from '@/server/erp/fake-connector';
@@ -47,7 +47,7 @@ function queueFault(connector: FakeERPConnector, fault: (typeof FAULT_OPTIONS)[n
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
-  return handleRoute(async () => {
+  return handleRoute(() => withDemoMutation(async () => {
     const { taskId } = await params;
     const tenantId = readDemoTenantId(req);
     if (!tenantId) return jsonError(400, 'Missing or invalid demo tenant id — send an x-demo-tenant-id header.');
@@ -67,6 +67,9 @@ export async function POST(req: Request, { params }: RouteParams) {
     const approvalId = (approvalStep?.output as { approvalId?: string } | undefined)?.approvalId;
     if (!approvalId) return jsonError(409, 'This task has no pending approval to decide.');
 
+    const approval = await deps.store.getApproval(tenantId, approvalId);
+    if (!approval || approval.status !== 'pending' || existing.result) return jsonError(409, 'Approval is no longer pending. Refresh the task.');
+
     // Human-decision-only entrypoint — this is the actual approval gate.
     // "decidedBy" here is the demo browser's self-generated tenant id,
     // standing in for a real human operator identity.
@@ -79,5 +82,5 @@ export async function POST(req: Request, { params }: RouteParams) {
     const task = await advance(deps, tenantId, taskId);
     const view = await buildTaskView(deps.store, tenantId, taskId);
     return NextResponse.json({ task: view, status: task.status });
-  });
+  }));
 }

@@ -1,44 +1,41 @@
-import { InMemoryTaskStore } from './memory-store';
-import { FakeERPConnector } from '@/server/erp/fake-connector';
-import { ExecutorDeps } from './executor';
+import { resolve } from "node:path";
+import { SqliteTaskStore } from "./sqlite-store";
+import {
+  FakeERPConnector,
+  type FakeInvoiceRecord,
+} from "@/server/erp/fake-connector";
 
-/**
- * Process-wide singleton for the `/api/demo/*` routes — a sandboxed,
- * no-login, no-real-ERP playground for the create_draft_invoice runtime
- * built in Milestone 1.
- *
- * Deliberately NOT the same store a real authenticated route would use:
- * this exists because the real app's Prisma client cannot be generated in
- * this sandbox (no network access to binaries.prisma.sh — confirmed in
- * docs/implementation/00-repo-audit.md and re-confirmed when wiring this
- * demo), so there is currently no way to exercise the runtime end-to-end
- * through the real, authenticated, database-backed app in this environment.
- * This demo proves the runtime behaves correctly over HTTP without
- * depending on either Prisma or a live Odoo instance — both genuinely
- * unavailable here, per the user's own confirmation.
- *
- * Uses the same `globalThis`-caching trick as `src/lib/db.ts` so the
- * in-memory data survives Next.js dev-server hot reloads within one
- * process, but — same caveat as any in-memory store — resets on a real
- * process restart. That is fine for a demo; it is explicitly NOT fine for
- * production (see docs/adr/0001-in-process-durable-execution.md).
- */
-const globalForDemo = globalThis as unknown as {
-  __wakeelDemoStore?: InMemoryTaskStore;
-  __wakeelDemoConnector?: FakeERPConnector;
-};
-
-export function getDemoExecutorDeps(): ExecutorDeps {
-  if (!globalForDemo.__wakeelDemoStore) {
-    globalForDemo.__wakeelDemoStore = new InMemoryTaskStore();
-  }
-  if (!globalForDemo.__wakeelDemoConnector) {
-    globalForDemo.__wakeelDemoConnector = new FakeERPConnector();
-  }
-  return {
-    store: globalForDemo.__wakeelDemoStore,
-    connector: globalForDemo.__wakeelDemoConnector,
+/** Local demo only. One Node process, persistent disk; no live ERP credentials.
+ * Both runtime state and synthetic ERP writes survive process restarts.
+ * This is not a queue, scheduler, production auth, or distributed runtime. */
+const shared = globalThis as unknown as {
+  __wakeelLocalRuntime?: {
+    store: SqliteTaskStore;
+    connector: FakeERPConnector;
   };
+  __wakeelDemoQueue?: Promise<unknown>;
+};
+export function getDemoExecutorDeps() {
+  if (!shared.__wakeelLocalRuntime) {
+    const store = new SqliteTaskStore(
+      process.env.WAKEEL_RUNTIME_DB ||
+        resolve(process.cwd(), "data/runtime.sqlite"),
+    );
+    const connector = new FakeERPConnector(
+      store.readFixture<FakeInvoiceRecord[]>("erp") ?? [],
+      (records) => store.writeFixture("erp", records),
+    );
+    shared.__wakeelLocalRuntime = { store, connector };
+  }
+  return shared.__wakeelLocalRuntime;
 }
-
-export const DEMO_ACTOR_ID = 'demo-operator';
+/** Serialize all demo mutations, including fault injection and cancellation.
+ * Single-process guarantee only; never launch multiple replicas with this API. */
+export function withDemoMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const current = (shared.__wakeelDemoQueue ?? Promise.resolve()).then(
+    operation,
+  );
+  shared.__wakeelDemoQueue = current.catch(() => undefined);
+  return current;
+}
+export const DEMO_ACTOR_ID = "demo-operator";

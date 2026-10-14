@@ -71,7 +71,6 @@ export function AssistantView() {
 
   // Voice State (Web Speech API)
   const [isListening, setIsListening] = useState(false);
-  const [speechSupported, setSpeechSupported] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
   const recognitionRef = useRef<any>(null);
 
@@ -98,7 +97,6 @@ export function AssistantView() {
         (window as any).SpeechRecognition ||
         (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
-        setSpeechSupported(true);
         const recognition = new SpeechRecognition();
         recognition.continuous = false;
         recognition.interimResults = false;
@@ -126,7 +124,7 @@ export function AssistantView() {
   }, [lang]);
 
   const toggleListening = () => {
-    if (!speechSupported || !recognitionRef.current) {
+    if (!recognitionRef.current) {
       toast.info(lang === "ar" ? "التعرف الصوتي غير مدعوم في متصفحك" : "Voice input is not supported in your browser");
       return;
     }

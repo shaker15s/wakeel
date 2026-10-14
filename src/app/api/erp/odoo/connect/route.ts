@@ -49,6 +49,7 @@ export async function POST(req: Request) {
       description: `Connected to ${url} as ${username}`,
       category: 'ERP',
       icon: 'Database',
+      color: '#714B67',
       origin: 'DISCOVERED',
       status: 'ACTIVE',
       health: 98,

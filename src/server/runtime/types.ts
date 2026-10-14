@@ -8,13 +8,9 @@
  * fields -> mandatory human approval -> idempotent, verified Odoo draft
  * invoice creation.
  *
- * Storage-agnostic by design: `TaskStore` is the persistence contract.
- * `InMemoryTaskStore` (memory-store.ts) is the only implementation built and
- * tested so far — see docs/implementation/03-milestone-1-report.md for why a
- * Prisma-backed store is deferred (this sandbox cannot download Prisma's
- * query-engine binary, so a Prisma implementation could not be exercised or
- * verified in this session; shipping it untested would violate the "never
- * claim a check passed that wasn't run" rule).
+ * Storage-agnostic: TaskStore is the persistence contract. Tests can use
+ * InMemoryTaskStore; the local demo uses SqliteTaskStore (Node >=22.13).
+ * Neither implementation is a distributed worker engine. See ADR 0002.
  */
 
 export type TaskStatus =
@@ -105,7 +101,7 @@ export interface TaskEvent {
   type: TaskEventType;
   actorType: 'system' | 'human' | 'model';
   actorId?: string;
-  /** Must already be redacted by the caller before this is persisted — see redact() in receipt.ts. */
+  /** Stores redact sensitive key names at the persistence boundary; see redact.ts. */
   payload: Record<string, unknown>;
   createdAt: Date;
 }

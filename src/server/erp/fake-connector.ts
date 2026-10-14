@@ -26,13 +26,14 @@ export type InvoiceFaultBehavior =
   | 'validation_error' // simulates a permanent, non-ambiguous rejection; NOTHING is created
   | 'crash_after_write'; // the record IS created in the fake backing store, but the call throws anyway
 
-interface FakeInvoiceRecord {
+export interface FakeInvoiceRecord {
   id: number;
   customerId: string | number;
   lines: Array<{ productId?: string | number; description: string; quantity: number; unitPrice: number }>;
   totalAmount: number;
   idempotencyKey?: string;
   createdAt: string;
+  state: 'draft';
 }
 
 export class FakeERPConnector implements IERPConnector {
@@ -40,6 +41,14 @@ export class FakeERPConnector implements IERPConnector {
   private nextId = 1;
   private invoiceBehaviorQueue: InvoiceFaultBehavior[] = [];
   private verificationDrift: Partial<FakeInvoiceRecord> | null = null;
+
+  constructor(
+    records: FakeInvoiceRecord[] = [],
+    private readonly persist?: (records: FakeInvoiceRecord[]) => void,
+  ) {
+    this.invoices = structuredClone(records);
+    this.nextId = Math.max(0, ...records.map(r => r.id)) + 1;
+  }
 
   /**
    * Test hook: queue the behavior for the next N createDraftInvoice() calls,
@@ -146,6 +155,13 @@ export class FakeERPConnector implements IERPConnector {
     idempotencyKey?: string,
   ): Promise<ExecutionResult<{ invoiceId: string | number; invoiceNumber?: string; state: 'draft' }>> {
     const start = Date.now();
+    const existing = idempotencyKey ? this.invoices.find(r => r.idempotencyKey === idempotencyKey) : undefined;
+    if (existing) {
+      if (String(existing.customerId) !== String(payload.customerId) || JSON.stringify(existing.lines) !== JSON.stringify(payload.lines)) {
+        return { success: false, error: { code: 'IDEMPOTENCY_CONFLICT', message: 'Key already used for different invoice data' }, durationMs: 0, auditId: 'fake-conflict' };
+      }
+      return { success: true, data: { invoiceId: existing.id, invoiceNumber: `FAKE-INV-${existing.id}`, state: 'draft' }, durationMs: 0, auditId: 'fake-replay' };
+    }
     const behavior = this.invoiceBehaviorQueue.shift() ?? 'success';
 
     if (behavior === 'transient_error') {
@@ -163,6 +179,7 @@ export class FakeERPConnector implements IERPConnector {
     const totalAmount = payload.lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
     const record: FakeInvoiceRecord = {
       id: this.nextId++,
+      state: 'draft',
       customerId: payload.customerId,
       lines: payload.lines,
       totalAmount,
@@ -170,6 +187,7 @@ export class FakeERPConnector implements IERPConnector {
       createdAt: new Date().toISOString(),
     };
     this.invoices.push(record);
+    this.persist?.(this.invoices);
 
     if (behavior === 'crash_after_write') {
       // The "external side effect" above already happened and is now

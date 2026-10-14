@@ -12,11 +12,9 @@ import { redact } from './redact';
 
 
 /**
- * In-memory TaskStore. This is the only TaskStore implementation exercised
- * in this session (see docs/implementation/03-milestone-1-report.md for why
- * a Prisma-backed store is deferred). It is written to the same contract a
- * Prisma-backed store must satisfy, so swapping is a constructor change, not
- * a rewrite of the executor.
+ * In-memory TaskStore for isolated, deterministic unit tests. The local
+ * application now uses SqliteTaskStore; both implement the same contract.
+ * See ADR 0002 for the persistence boundary and single-process limitations.
  *
  * Deliberately NOT for production use at scale (no persistence across
  * process restarts) — but every method enforces the same tenant-scoping
