@@ -12,8 +12,10 @@ export type ConversationTurnResult = {
   toolTrace: ToolTraceItem[];
   taskIds: string[];
   evidence: Array<{ provider: string; auditId: string; observedAt: string }>;
-  status: 'answered' | 'review_required' | 'failed';
+  status: 'answered' | 'waiting_for_approval' | 'review_required' | 'failed';
 };
+
+export interface DurableTaskReceipt { taskId: string; status: string; approvalId?: string; workflowType: string; }
 
 export interface ConversationTurnInput {
   tenantId: string;
@@ -27,6 +29,7 @@ export interface ConversationTurnInput {
   history?: Array<{ role: 'user' | 'assistant'; content: string }>;
   connector?: IERPConnector | null;
   provider?: ModelProvider;
+  createDurableTask?: (toolName: string, input: unknown) => Promise<DurableTaskReceipt | null>;
 }
 
 function systemPrompt(input: ConversationTurnInput): string {
@@ -71,6 +74,8 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
   let approvalRequired = false;
   let reviewRequired = false;
   let toolCount = 0;
+  const taskIds: string[] = [];
+  let durableApprovalRequired = false;
 
   let financeContext: FinanceToolContext | null = null;
 
@@ -88,6 +93,23 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
       const output = await provider.completeTurn({ messages, tools: financeContext && allowToolCalls ? tools : [], allowToolCalls });
       if (output.type === 'message') {
         if (approvalRequired) {
+          if (durableApprovalRequired && taskIds.length > 0) {
+            const taskId = taskIds[0];
+            return {
+              reply: input.lang === 'ar'
+                ? `حفظت طلب المسودة في سجل المهام برقم ${taskId}. لا يوجد أي ترحيل أو دفع؛ الطلب ينتظر موافقتك.`
+                : `I saved the draft request as task ${taskId}. Nothing has been posted or paid; it is waiting for your approval.`,
+              toolTrace, taskIds, evidence, status: 'waiting_for_approval',
+            };
+          }
+          if (taskIds.length > 0) {
+            return {
+              reply: input.lang === 'ar'
+                ? `حُفظ الطلب ${taskIds[0]} لكنه يحتاج مراجعة قبل أي إجراء. لم يُنشأ سجل في النظام المالي.`
+                : `Task ${taskIds[0]} was saved but requires review before any action. No financial record was created.`,
+              toolTrace, taskIds, evidence, status: 'review_required',
+            };
+          }
           return {
             reply: input.lang === 'ar'
               ? 'هذا الإجراء يحتاج موافقة بشرية مرتبطة بطلب محفوظ، ومسار الموافقة الآمن غير جاهز هنا. لم يتم إنشاء أو تعديل أي سجل.'
@@ -97,7 +119,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
         }
         return {
           reply: output.text.trim() || (input.lang === 'ar' ? 'لا توجد معلومات إضافية مؤكدة.' : 'There is no additional verified information.'),
-          toolTrace, taskIds: [], evidence,
+          toolTrace, taskIds, evidence,
           status: reviewRequired ? 'review_required' : 'answered',
         };
       }
@@ -105,7 +127,7 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
       if (!allowToolCalls) {
         return {
           reply: input.lang === 'ar' ? 'توقفت عند حد استدعاءات الأدوات الآمن. راجع النتائج المؤكدة أو قسّم الطلب.' : 'I stopped at the safe tool-call limit. Please review verified results or narrow the request.',
-          toolTrace, taskIds: [], evidence, status: 'review_required',
+          toolTrace, taskIds, evidence, status: 'review_required',
         };
       }
       if (!financeContext) return genericFailure(input.lang);
@@ -121,7 +143,18 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
         }
 
         toolCount += 1;
-        const result = await executeFinanceTool(financeContext, call.name, call.arguments);
+        let result = await executeFinanceTool(financeContext, call.name, call.arguments);
+        if (result.status === 'approval_required' && input.createDurableTask) {
+          try {
+            const task = await input.createDurableTask(call.name, call.arguments);
+            if (task) {
+              taskIds.push(task.taskId);
+              durableApprovalRequired = task.status === 'waiting_for_approval';
+            }
+          } catch {
+            reviewRequired = true;
+          }
+        }
         const reason = result.status === 'succeeded' ? undefined : result.status === 'approval_required' ? 'Human approval is required.' : result.reason;
         toolTrace.push({ name: call.name, status: result.status, ...(reason ? { reason } : {}) });
         if (result.status === 'succeeded') evidence.push(...result.evidence);
@@ -130,14 +163,14 @@ export async function runConversationTurn(input: ConversationTurnInput): Promise
         }
         if (result.status === 'review_required' || result.status === 'denied') reviewRequired = true;
         const modelResult = result.status === 'approval_required'
-          ? { status: result.status, message: 'No action was performed. A durable human approval workflow is not available in this chat path.' }
+          ? { status: result.status, taskId: taskIds.at(-1) ?? null, message: durableApprovalRequired ? 'No action was performed. The durable task is saved and awaits approval.' : 'No action was performed. The durable task requires review or the approval workflow is unavailable.' }
           : result;
         messages.push({ role: 'tool', toolCallId: call.callId, content: safeStringify(modelResult) });
       }
     }
     return {
       reply: input.lang === 'ar' ? 'وصلت إلى حد خطوات التحليل الآمن. راجع النتائج المؤكدة أو قسّم الطلب.' : 'I reached the safe analysis step limit. Please review the verified results or narrow the request.',
-      toolTrace, taskIds: [], evidence, status: 'review_required',
+      toolTrace, taskIds, evidence, status: 'review_required',
     };
   } catch {
     return genericFailure(input.lang);

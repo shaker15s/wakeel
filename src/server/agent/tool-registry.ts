@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { IERPConnector, ERPConnectionStatus, ExecutionResult } from '../erp/contract';
 import { PolicyEngine } from '../policy/engine';
+import { createDraftVendorBillInputSchema } from '../runtime/workflows/create-draft-vendor-bill';
 
 export type FinanceRiskClass = 'READ' | 'DRAFT_WRITE' | 'FINANCIAL_COMMIT' | 'DESTRUCTIVE';
 export type FinanceCapability = Exclude<keyof ERPConnectionStatus['permissions'], 'rawPermissions'>;
@@ -129,13 +130,22 @@ export const FINANCE_TOOLS: readonly FinanceTool<any, any>[] = [
     execute: (ctx, input) => ctx.connector.getFinancialStatement(input),
   },
   {
-    name: 'create_draft_invoice',
+    name: 'create_draft_customer_invoice',
     domain: 'accounts_receivable',
-    description: 'Prepare a customer invoice draft. Requires a server-side human approval.',
+    description: 'Prepare a customer invoice draft for a verified customer. Never use this for supplier bills; a durable human approval is mandatory.',
     riskClass: 'DRAFT_WRITE',
     inputSchema: invoiceInput,
     requiredCapability: 'canCreateDraftInvoices',
     execute: (ctx, input) => ctx.connector.createDraftInvoice(input),
+  },
+  {
+    name: 'create_draft_vendor_bill',
+    domain: 'accounts_payable',
+    description: 'Prepare a vendor-bill draft after checking vendor identity and the exact approved amount. A durable human approval is mandatory.',
+    riskClass: 'DRAFT_WRITE',
+    inputSchema: createDraftVendorBillInputSchema,
+    requiredCapability: 'canCreateDraftVendorBills',
+    execute: async () => ({ success: false, error: { code: 'DURABLE_APPROVAL_REQUIRED', message: 'Vendor-bill drafts require the persisted approval task workflow.' }, durationMs: 0, auditId: `vendor-bill-approval-required-${Date.now()}` }),
   },
 ];
 

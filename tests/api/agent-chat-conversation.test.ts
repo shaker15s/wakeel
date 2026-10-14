@@ -73,6 +73,8 @@ describe('/api/agent/chat conversation persistence', () => {
     expect(db.chatMessage.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({ userId: user.id, tenantId: account.id, conversationId: conversation.id, role: 'USER' }) });
     expect(db.chatMessage.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({ userId: user.id, tenantId: account.id, conversationId: conversation.id, role: 'AGENT' }) });
     expect(AgentRuntime.run).toHaveBeenCalledWith('Hi', [], expect.objectContaining({
+      tenantId: account.id,
+      operatorId: user.id,
       conversationId: conversation.id,
       memories: [{ id: 'm1', key: 'report_language', value: 'Arabic', category: 'preference' }],
     }));

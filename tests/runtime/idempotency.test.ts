@@ -128,6 +128,24 @@ describe('idempotency and crash recovery', () => {
     expect(connector.getCreatedInvoices()).toHaveLength(1);
   });
 
+  it('does not issue a second customer invoice connector call during a concurrent advance', async () => {
+    const deps = makeDeps(); const connector = deps.connector as FakeERPConnector;
+    const task = await runToApproved(deps);
+    let markStarted!: () => void; let releaseWrite!: () => void;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const gate = new Promise<void>((resolve) => { releaseWrite = resolve; });
+    const original = connector.createDraftInvoice.bind(connector);
+    let calls = 0;
+    connector.createDraftInvoice = async (...args) => { calls += 1; markStarted(); await gate; return original(...args); };
+    const first = advance(deps, TENANT_A, task.id);
+    await started;
+    await advance(deps, TENANT_A, task.id);
+    releaseWrite();
+    expect((await first).status).toBe('succeeded');
+    expect(calls).toBe(1);
+    expect(connector.getCreatedInvoices()).toHaveLength(1);
+  });
+
   it('rejects idempotency-key reuse with a different request hash instead of trusting the cache blindly', async () => {
     const deps = makeDeps();
     const task = await runToApproved(deps);

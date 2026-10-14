@@ -199,6 +199,7 @@ export class Odoo19Connector implements IERPConnector {
           canCreateDraftPurchases: true,
           canMutateFinancials: false, // Strict safety
           canReadAccounting: false,
+          canCreateDraftVendorBills: false,
           rawPermissions: {},
         },
         confirmedEntities: ['customer', 'sale_order', 'invoice', 'product'],
@@ -218,6 +219,7 @@ export class Odoo19Connector implements IERPConnector {
           canCreateDraftPurchases: false,
           canMutateFinancials: false,
           canReadAccounting: false,
+          canCreateDraftVendorBills: false,
           rawPermissions: {},
         },
         confirmedEntities: [],
@@ -417,9 +419,16 @@ export class Odoo19Connector implements IERPConnector {
   async getAccountActivity(_params: { accountId: string; dateFrom: string; dateTo: string; currency: string }): Promise<ExecutionResult<any>> { return this.accountingUnavailable(); }
   async getAgedBalances(_params: { kind: 'payable' | 'receivable'; asOf: string; currency: string }): Promise<ExecutionResult<any>> { return this.accountingUnavailable(); }
   async getFinancialStatement(_params: { kind: 'profit_and_loss' | 'balance_sheet' | 'cash_flow'; dateFrom: string; dateTo: string; currency: string }): Promise<ExecutionResult<any>> { return this.accountingUnavailable(); }
+  async verifyPartnerRole(_partnerId: string | number, _role: 'customer' | 'vendor'): Promise<ExecutionResult<{ partnerId: string | number; role: 'customer' | 'vendor'; matches: boolean }>> {
+    return { success: false, error: { code: 'PARTNER_ROLE_UNVERIFIED', message: 'Partner role is not verified for this Odoo database.' }, durationMs: 0, auditId: `odoo-partner-unverified-${Date.now()}` };
+  }
 
   private accountingUnavailable<T>(): ExecutionResult<T> {
     return { success: false, error: { code: 'ACCOUNTING_SCHEMA_UNVERIFIED', message: 'This Odoo database has not been verified for accounting report models and fields.' }, durationMs: 0, auditId: `odoo-accounting-unverified-${Date.now()}` };
+  }
+
+  async createDraftVendorBill(): Promise<ExecutionResult<any>> {
+    return { success: false, error: { code: 'VENDOR_BILL_CAPABILITY_UNVERIFIED', message: 'Vendor-bill writes are disabled until this Odoo database, tax configuration, partner role, and idempotency path are verified in a sandbox.' }, durationMs: 0, auditId: `odoo-vendor-bill-unverified-${Date.now()}` };
   }
 
   async createDraftInvoice(

@@ -137,7 +137,7 @@ async function succeed(deps: ExecutorDeps, tenantId: string, taskId: string, sum
  * `tenantId` here throws, same as `advance()`.
  */
 export async function cancelTask(
-  deps: ExecutorDeps,
+  deps: Pick<ExecutorDeps, 'store'>,
   tenantId: string,
   taskId: string,
   actorId: string,
@@ -453,7 +453,16 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
       if (mismatches.length === 0) {
         await deps.store.updateStep(tenantId, taskId, current.id, { status: 'succeeded', output: verified, startedAt: now, finishedAt: now });
         await deps.store.appendEvent(tenantId, { taskId, type: 'verification_result', actorType: 'system', payload: { ok: true, invoiceId: written.invoiceId } });
-        return succeed(deps, tenantId, taskId, `Draft invoice ${written.invoiceNumber ?? written.invoiceId} created and verified.`);
+        const approvedActionHash = (steps.find((step) => step.name === 'policy_check')?.output as { actionHash?: string } | undefined)?.actionHash ?? '';
+        const summary = `Draft customer invoice ${written.invoiceNumber ?? written.invoiceId} created and verified.`;
+        await deps.store.appendEvent(tenantId, { taskId, type: 'task_status_changed', actorType: 'system', payload: { status: 'succeeded', summary } });
+        return deps.store.updateTask(tenantId, taskId, {
+          status: 'succeeded',
+          result: {
+            outcome: 'succeeded', summary, unresolvedIssues: [],
+            receipt: { documentKind: 'customer_invoice', erpRecordId: written.invoiceId, partnerRole: 'customer', currency: verified.currency ?? null, verifiedTotal: typeof verified.totalAmount === 'number' ? String(verified.totalAmount) : null, approvedActionHash, verificationSource: deps.connector.getMetadata().provider, unresolvedIssues: [] },
+          },
+        });
       }
 
       await deps.store.updateStep(tenantId, taskId, current.id, {
@@ -513,9 +522,14 @@ async function runIdempotentWrite(
       await deps.store.updateStep(tenantId, taskId, stepId, { status: 'succeeded', output: reconciled, finishedAt: now });
       return { status: 'advanced' };
     }
+    // Another live advance() may still be inside the connector. Do not fail
+    // its task or issue a second write while this idempotency record is fresh.
+    if (now.getTime() - existing.updatedAt.getTime() < 2 * 60 * 1000) {
+      return { status: 'blocked', task: await deps.store.updateTask(tenantId, taskId, { status: 'running' }) };
+    }
     // Ambiguous: a previous attempt is (or claims to be) still in flight and
-    // we have no way to confirm whether it already took effect. Never retry
-    // blindly — escalate instead of risking a duplicate financial write.
+    // it is stale and we have no way to confirm whether it already took effect.
+    // Never retry blindly — escalate instead of risking a duplicate write.
     await deps.store.updateStep(tenantId, taskId, stepId, { status: 'failed', errorCode: 'AMBIGUOUS_WRITE_OUTCOME', finishedAt: now });
     return {
       status: 'blocked',

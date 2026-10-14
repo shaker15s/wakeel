@@ -49,6 +49,7 @@ export interface ERPPermissionSummary {
   canMutateFinancials: boolean;
   /** Optional until a connector proves accounting-model access on the linked database. */
   canReadAccounting?: boolean;
+  canCreateDraftVendorBills?: boolean;
   rawPermissions: Record<string, boolean>;
 }
 
@@ -96,6 +97,7 @@ export interface IERPConnector {
   getAccountActivity(params: { accountId: string; dateFrom: string; dateTo: string; currency: string }): Promise<ExecutionResult<any>>;
   getAgedBalances(params: { kind: 'payable' | 'receivable'; asOf: string; currency: string }): Promise<ExecutionResult<any>>;
   getFinancialStatement(params: { kind: 'profit_and_loss' | 'balance_sheet' | 'cash_flow'; dateFrom: string; dateTo: string; currency: string }): Promise<ExecutionResult<any>>;
+  verifyPartnerRole(partnerId: string | number, role: 'customer' | 'vendor'): Promise<ExecutionResult<{ partnerId: string | number; role: 'customer' | 'vendor'; matches: boolean }>>;
 
   // Canonical Safe Mutation APIs (Creates draft states only, verified before execution)
   //
@@ -109,6 +111,10 @@ export interface IERPConnector {
     payload: { customerId: string | number; lines: Array<{ productId?: string | number; description: string; quantity: number; unitPrice: number }> },
     idempotencyKey?: string,
   ): Promise<ExecutionResult<{ invoiceId: string | number; invoiceNumber?: string; state: 'draft' }>>;
+  createDraftVendorBill(
+    payload: { vendorId: string | number; vendorBillReference: string; billDate: string; currency: string; lines: Array<{ description: string; quantity: string; unitPrice: string }> },
+    idempotencyKey: string,
+  ): Promise<ExecutionResult<{ vendorBillId: string | number; vendorBillReference: string; vendorId: string | number; currency: string; totalAmount: string; documentKind: 'vendor_bill'; moveType: 'in_invoice'; state: 'draft' }>>;
   createDraftPurchaseOrder(payload: { vendorId: string | number; lines: Array<{ description: string; quantity: number; unitPrice: number }> }): Promise<ExecutionResult<{ orderId: string | number; state: 'draft' }>>;
 
   /**

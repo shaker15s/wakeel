@@ -12,6 +12,8 @@ export interface AgentRunContext {
   provider?: ModelProvider;
   conversationId?: string;
   memories?: MemoryItem[];
+  tenantId?: string;
+  createDurableTask?: (toolName: string, input: unknown) => Promise<{ taskId: string; status: string; approvalId?: string; workflowType: string } | null>;
 }
 
 export interface AgentRunResponse {
@@ -40,7 +42,7 @@ export class AgentRuntime {
     }
 
     const result = await runConversationTurn({
-      tenantId: ctx.operatorId,
+      tenantId: ctx.tenantId ?? ctx.operatorId,
       actorId: ctx.operatorId,
       conversationId: ctx.conversationId ?? 'current-conversation',
       userMessage,
@@ -51,6 +53,7 @@ export class AgentRuntime {
       history,
       connector: ctx.connector,
       provider: ctx.provider,
+      createDurableTask: ctx.createDurableTask,
     });
 
     return {

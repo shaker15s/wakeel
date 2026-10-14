@@ -45,7 +45,7 @@ export type IdempotencyStatus = 'in_progress' | 'completed' | 'failed';
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 /** The one workflow type this milestone implements. More are added later, never inferred silently. */
-export type WorkflowType = 'create_draft_invoice';
+export type WorkflowType = 'create_draft_invoice' | 'create_draft_vendor_bill';
 
 export interface Task {
   id: string;
@@ -66,6 +66,18 @@ export interface Task {
 export interface TaskResult {
   outcome: Extract<TaskStatus, 'succeeded' | 'partially_succeeded' | 'failed' | 'cancelled' | 'expired'>;
   summary: string;
+  unresolvedIssues: string[];
+  receipt?: DraftDocumentReceipt;
+}
+
+export interface DraftDocumentReceipt {
+  documentKind: 'customer_invoice' | 'vendor_bill';
+  erpRecordId: string | number;
+  partnerRole: 'customer' | 'vendor';
+  currency: string | null;
+  verifiedTotal: string | null;
+  approvedActionHash: string;
+  verificationSource: string;
   unresolvedIssues: string[];
 }
 

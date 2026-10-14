@@ -10,7 +10,7 @@ The older `create_draft_invoice` compatibility workflow still accepts JavaScript
 
 ## AP and AR meaning
 
-Canonical document kinds are `customer_invoice` and `vendor_bill`. Odoo move type mapping is explicit: a customer invoice requires customer partner semantics and maps to `out_invoice`; a vendor bill requires vendor semantics and maps to `in_invoice`. A missing or conflicting partner role throws and must be surfaced as review required. This is only a mapping contract; no vendor-bill write is enabled by this change.
+Canonical document kinds are `customer_invoice` and `vendor_bill`. Odoo move type mapping is explicit: a customer invoice requires customer partner semantics and maps to `out_invoice`; a vendor bill requires vendor semantics and maps to `in_invoice`. A missing or conflicting partner role throws and must be surfaced as review required. Vendor-bill draft writes are implemented against the synthetic fake connector; Odoo vendor-bill writing remains disabled until the exact database, tax configuration, partner role and idempotency behavior are verified in a sandbox.
 
 ## Odoo verification boundary
 

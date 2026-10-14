@@ -42,6 +42,8 @@ const REGISTERED_TOOL_CATEGORIES: Readonly<Record<string, ActionRequest['categor
   get_aged_balances: 'READ',
   get_financial_statement: 'READ',
   create_draft_invoice: 'DRAFT_WRITE',
+  create_draft_customer_invoice: 'DRAFT_WRITE',
+  create_draft_vendor_bill: 'DRAFT_WRITE',
   // Preserved for the existing, separately approval-gated runtime workflow.
   create_draft_purchase_order: 'DRAFT_WRITE',
 };
@@ -79,7 +81,7 @@ export class PolicyEngine {
     }
 
     // 3. Draft Invoices / Purchase Orders -> Require Human-In-The-Loop Approval
-    if (action.toolName === 'create_draft_invoice') {
+    if (action.toolName === 'create_draft_invoice' || action.toolName === 'create_draft_customer_invoice') {
       const amount = action.parameters.lines?.reduce(
         (sum: number, l: any) => sum + (Number(l.quantity) * Number(l.unitPrice) || 0),
         0
@@ -97,6 +99,24 @@ export class PolicyEngine {
             { label: 'العميل (Customer ID)', value: String(action.parameters.customerId) },
             { label: 'عدد البنود (Lines)', value: String(action.parameters.lines?.length || 0) },
             { label: 'المبلغ الإجمالي (Amount)', value: `${amount?.toLocaleString()} EGP` },
+          ],
+          mutationPayload: action.parameters,
+        },
+      };
+    }
+
+    if (action.toolName === 'create_draft_vendor_bill') {
+      return {
+        allowed: true, requiresApproval: true,
+        riskLevel: action.amount && action.amount > 25000 ? 'HIGH' : 'MEDIUM',
+        reason: 'Creating a vendor bill draft requires explicit operator approval.',
+        approvalCard: {
+          title: 'إنشاء مسودة فاتورة مورد',
+          description: `مسودة المورد ${action.parameters.vendorBillReference} بقيمة ${action.parameters.totalAmount} ${action.parameters.currency}`,
+          details: [
+            { label: 'المورد', value: String(action.parameters.vendorId) },
+            { label: 'مرجع فاتورة المورد', value: String(action.parameters.vendorBillReference) },
+            { label: 'عدد البنود', value: String(action.parameters.lines?.length ?? 0) },
           ],
           mutationPayload: action.parameters,
         },

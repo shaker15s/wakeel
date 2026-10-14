@@ -16,6 +16,7 @@ const createContext = (connector = new FakeERPConnector(), overrides: Partial<Fi
     canCreateDraftPurchases: false,
     canMutateFinancials: false,
     canReadAccounting: true,
+    canCreateDraftVendorBills: true,
   },
   ...overrides,
 });
@@ -94,11 +95,22 @@ describe('finance tool registry', () => {
   it('returns an approval request instead of executing a draft write', async () => {
     const connector = new FakeERPConnector();
     const write = vi.spyOn(connector, 'createDraftInvoice');
-    const result = await executeFinanceTool(createContext(connector), 'create_draft_invoice', {
+    const result = await executeFinanceTool(createContext(connector), 'create_draft_customer_invoice', {
       customerId: 12,
       lines: [{ description: 'Service', quantity: 1, unitPrice: 100 }],
     });
 
+    expect(result.status).toBe('approval_required');
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it('requires durable approval for a vendor bill and never writes from a model tool call', async () => {
+    const connector = new FakeERPConnector();
+    const write = vi.spyOn(connector, 'createDraftVendorBill');
+    const result = await executeFinanceTool(createContext(connector), 'create_draft_vendor_bill', {
+      vendorId: 'vendor-1', vendorBillReference: 'SUP-1', billDate: '2026-02-01', currency: 'EGP',
+      lines: [{ description: 'Paper', quantity: '2', unitPrice: '10.25' }],
+    });
     expect(result.status).toBe('approval_required');
     expect(write).not.toHaveBeenCalled();
   });

@@ -115,6 +115,15 @@ export interface AgentMemory {
   updatedAt: string;
 }
 
+export interface AccountingTaskView {
+  id: string;
+  workflowType: string;
+  status: string;
+  input: unknown;
+  result?: { outcome: string; summary: string; receipt?: { documentKind: string; erpRecordId: string | number; partnerRole: string; currency: string | null; verifiedTotal: string | null; approvedActionHash: string; verificationSource: string; unresolvedIssues: string[] } };
+  pendingApproval: null | { id: string; summary: string; actionHash: string; expiresAt: string; normalizedParams: unknown };
+}
+
 export interface SystemRecordDTO {
   id: string;
   systemId: string;
@@ -501,6 +510,16 @@ export function updateAgentMemory(userId: string, memoryId: string, patch: Parti
 export function forgetAgentMemory(userId: string, memoryId: string) {
   return api<{ ok: true }>('/api/agent/memory', {
     method: 'DELETE', body: JSON.stringify({ userId, memoryId }),
+  });
+}
+
+export function getAccountingTask(userId: string, taskId: string) {
+  return api<{ task: AccountingTaskView }>(`/api/agent/tasks/${encodeURIComponent(taskId)}?userId=${encodeURIComponent(userId)}`);
+}
+
+export function decideAccountingTask(userId: string, taskId: string, approvalId: string, decision: 'approved' | 'rejected') {
+  return api<{ task: AccountingTaskView }>(`/api/agent/tasks/${encodeURIComponent(taskId)}/approval`, {
+    method: 'POST', body: JSON.stringify({ userId, approvalId, decision }),
   });
 }
 

@@ -114,7 +114,7 @@ describe('bounded accounting conversation runtime', () => {
 
   it('does not expose an unpersisted approval card or perform a draft write', async () => {
     const provider = new QueueProvider([
-      { type: 'tool_calls', calls: [{ callId: 'draft', name: 'create_draft_invoice', arguments: { customerId: 4, lines: [{ description: 'Service', quantity: 1, unitPrice: 10 }] } }] },
+      { type: 'tool_calls', calls: [{ callId: 'draft', name: 'create_draft_customer_invoice', arguments: { customerId: 4, lines: [{ description: 'Service', quantity: 1, unitPrice: 10 }] } }] },
       { type: 'message', text: 'Please approve the draft.' },
     ]);
     const connector = new FakeERPConnector();
@@ -127,6 +127,20 @@ describe('bounded accounting conversation runtime', () => {
     expect(result.status).toBe('review_required');
     expect(result).not.toHaveProperty('approvalCard');
     expect(result.reply).toContain('No record was created');
+  });
+
+  it('creates an approval-bound durable task when the server task handler is configured', async () => {
+    const provider = new QueueProvider([
+      { type: 'tool_calls', calls: [{ callId: 'draft', name: 'create_draft_vendor_bill', arguments: { vendorId: 'vendor-1', vendorBillReference: 'SUP-4', billDate: '2026-02-01', currency: 'EGP', lines: [{ description: 'Paper', quantity: '2', unitPrice: '10.25' }] } }] },
+      { type: 'message', text: 'The vendor bill is waiting for approval.' },
+    ]);
+    const result = await runConversationTurn({
+      tenantId: 'tenant-a', actorId: 'operator-a', conversationId: 'conversation-a', userMessage: 'Create vendor bill SUP-4', lang: 'en',
+      provider, connector: new FakeERPConnector(),
+      createDurableTask: async (toolName) => ({ taskId: `saved-${toolName}`, status: 'waiting_for_approval', approvalId: 'approval-1', workflowType: 'create_draft_vendor_bill' }),
+    });
+    expect(result).toMatchObject({ status: 'waiting_for_approval', taskIds: ['saved-create_draft_vendor_bill'] });
+    expect(result.reply).toContain('Nothing has been posted or paid');
   });
 
   it('returns a bounded safe result if the model never finishes its tool loop', async () => {

@@ -7,6 +7,10 @@ import { LIMITS, rateLimit, tooManyRequests } from '@/lib/rate-limit'
 import { AgentRuntime } from '@/server/agent/runtime'
 import { Odoo19Connector } from '@/server/erp/odoo-connector'
 import { PrismaMemoryStore } from '@/server/agent/memory-store'
+import { PrismaTaskStore } from '@/server/runtime/prisma-store'
+import { createCreateDraftInvoiceTask, advance } from '@/server/runtime/executor'
+import { createDraftVendorBillTask, advanceDraftVendorBill } from '@/server/runtime/vendor-bill-executor'
+import { buildTaskView } from '@/server/runtime/demo-view'
 
 const chatSchema = z.object({
   userId: z.string().trim().min(1, 'userId is required'),
@@ -19,6 +23,7 @@ const AGENT_FALLBACK_REPLY =
   'Apologies — my reasoning core flickered out mid-thought. Give me a moment and ask again; in the meantime, all your systems remain under watch.'
 
 const memoryStore = new PrismaMemoryStore(db)
+const taskStore = new PrismaTaskStore(db)
 
 function getConversation(tenantId: string, actorId: string) {
   return db.agentConversation.upsert({
@@ -136,12 +141,27 @@ export async function POST(req: Request) {
       })),
       {
         operatorId: guard.user.id,
+        tenantId: guard.account.id,
         operatorName: user.name,
         workspaceName: user.workspace,
         lang: sessionLang,
         connector,
         conversationId: conversation.id,
         memories,
+        createDurableTask: async (toolName, input) => {
+          const deps = { store: taskStore, connector: connector! }
+          let task
+          let advanced
+          if (toolName === 'create_draft_customer_invoice') {
+            task = await createCreateDraftInvoiceTask(deps, { tenantId: guard.account.id, actorId: guard.user.id, input })
+            advanced = await advance(deps, guard.account.id, task.id)
+          } else if (toolName === 'create_draft_vendor_bill') {
+            task = await createDraftVendorBillTask(deps, { tenantId: guard.account.id, actorId: guard.user.id, input })
+            advanced = await advanceDraftVendorBill(deps, guard.account.id, task.id)
+          } else return null
+          const view = await buildTaskView(taskStore, guard.account.id, task.id)
+          return { taskId: task.id, status: advanced.status, approvalId: view?.pendingApproval?.id, workflowType: task.workflowType }
+        },
       }
     );
 

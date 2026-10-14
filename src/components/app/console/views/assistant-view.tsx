@@ -44,6 +44,7 @@ import { cn } from "@/lib/utils";
 
 import { ConnectOdooDialog } from "@/components/app/console/connections/connect-odoo-dialog";
 import { AgentMemoryPanel } from "@/components/app/console/agent-memory-panel";
+import { AccountingTaskApprovalPanel } from "@/components/app/console/accounting-task-approval-panel";
 
 function msgTime(iso: string) {
   try {
@@ -70,11 +71,11 @@ export function AssistantView() {
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState<any>(null);
 
   // Voice State (Web Speech API)
   const [isListening, setIsListening] = useState(false);
-  const [speechSupported, setSpeechSupported] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
   const recognitionRef = useRef<any>(null);
 
@@ -101,7 +102,6 @@ export function AssistantView() {
         (window as any).SpeechRecognition ||
         (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
-        setSpeechSupported(true);
         const recognition = new SpeechRecognition();
         recognition.continuous = false;
         recognition.interimResults = false;
@@ -129,7 +129,7 @@ export function AssistantView() {
   }, [lang]);
 
   const toggleListening = () => {
-    if (!speechSupported || !recognitionRef.current) {
+    if (!recognitionRef.current) {
       toast.info(lang === "ar" ? "التعرف الصوتي غير مدعوم في متصفحك" : "Voice input is not supported in your browser");
       return;
     }
@@ -170,6 +170,7 @@ export function AssistantView() {
       if (res.approvalCard) {
         setPendingApproval(res.approvalCard);
       }
+      if (res.taskIds?.length) setActiveTaskId(res.taskIds[0]);
       if (autoSpeak && res.reply) {
         speakText(res.reply);
       }
@@ -337,6 +338,7 @@ export function AssistantView() {
       {/* Connect Odoo Dialog Component */}
       <ConnectOdooDialog open={connectOpen} onOpenChange={setConnectOpen} />
       {memoryOpen && userId ? <AgentMemoryPanel userId={userId} onClose={() => setMemoryOpen(false)} /> : null}
+      {activeTaskId && userId ? <AccountingTaskApprovalPanel userId={userId} taskId={activeTaskId} lang={lang} onClose={() => setActiveTaskId(null)} /> : null}
 
       {/* Main Friendly Chat Container */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">

@@ -6,7 +6,7 @@ import {
   IERPConnector,
 } from './contract';
 import { calculateAgedBalances, calculateFinancialStatement, calculateTrialBalance, readAccountActivity, readChartOfAccounts, type AccountingDataset } from '../accounting/read-tools';
-import type { Money } from '../accounting/money';
+import { createMoney, MoneyMath, type Money } from '../accounting/money';
 
 function demoMoney(amount: string, currency: string): Money {
   return { amount, currency, scale: currency === 'JPY' ? 0 : 2 };
@@ -67,12 +67,20 @@ interface FakeInvoiceRecord {
   createdAt: string;
 }
 
+interface FakeVendorBillRecord {
+  id: number; vendorId: string | number; vendorBillReference: string; billDate: string;
+  currency: string; totalAmount: string; documentKind: 'vendor_bill'; moveType: 'in_invoice'; state: 'draft';
+  lines: Array<{ description: string; quantity: string; unitPrice: string }>; idempotencyKey: string;
+}
+
 export class FakeERPConnector implements IERPConnector {
   private invoices: FakeInvoiceRecord[] = [];
   private nextId = 1;
   private invoiceBehaviorQueue: InvoiceFaultBehavior[] = [];
   private verificationDrift: Partial<FakeInvoiceRecord> | null = null;
   constructor(private accountingDataset: AccountingDataset = createDemoAccountingDataset()) {}
+  private vendorBills: FakeVendorBillRecord[] = [];
+  private vendorBillBehaviorQueue: InvoiceFaultBehavior[] = [];
 
   /**
    * Test hook: queue the behavior for the next N createDraftInvoice() calls,
@@ -83,6 +91,9 @@ export class FakeERPConnector implements IERPConnector {
   queueInvoiceBehavior(behavior: InvoiceFaultBehavior): void {
     this.invoiceBehaviorQueue.push(behavior);
   }
+
+  queueVendorBillBehavior(behavior: InvoiceFaultBehavior): void { this.vendorBillBehaviorQueue.push(behavior); }
+  getCreatedVendorBills(): ReadonlyArray<FakeVendorBillRecord> { return this.vendorBills.map((bill) => ({ ...bill, lines: bill.lines.map((line) => ({ ...line })) })); }
 
   /** Test hook: inspect everything "created" so far, e.g. to assert call count. */
   getCreatedInvoices(): ReadonlyArray<FakeInvoiceRecord> {
@@ -126,6 +137,7 @@ export class FakeERPConnector implements IERPConnector {
         canCreateDraftPurchases: true,
         canMutateFinancials: false,
         canReadAccounting: true,
+        canCreateDraftVendorBills: true,
         rawPermissions: {},
       },
       confirmedEntities: ['customer', 'sale_order', 'invoice', 'product'],
@@ -160,6 +172,10 @@ export class FakeERPConnector implements IERPConnector {
       }
       return { success: true, data, durationMs: Date.now() - start, auditId: `fake-${Date.now()}` };
     }
+    if (entityId === 'vendor_bill') {
+      const found = this.vendorBills.find((bill) => bill.id === Number(id)) ?? null;
+      return { success: true, data: found ? { ...found, lines: found.lines.map((line) => ({ ...line })) } : null, durationMs: Date.now() - start, auditId: `fake-${Date.now()}` };
+    }
     return { success: true, data: null, durationMs: Date.now() - start, auditId: `fake-${Date.now()}` };
   }
 
@@ -193,6 +209,11 @@ export class FakeERPConnector implements IERPConnector {
 
   async getFinancialStatement(params: { kind: 'profit_and_loss' | 'balance_sheet' | 'cash_flow'; dateFrom: string; dateTo: string; currency: string }): Promise<ExecutionResult<any>> {
     return this.accountingRead(() => calculateFinancialStatement(this.accountingDataset, params));
+  }
+
+  async verifyPartnerRole(partnerId: string | number, role: 'customer' | 'vendor'): Promise<ExecutionResult<{ partnerId: string | number; role: 'customer' | 'vendor'; matches: boolean }>> {
+    const matches = role === 'vendor' ? String(partnerId) === 'vendor-1' : String(partnerId) === 'customer-1';
+    return { success: true, data: { partnerId, role, matches }, durationMs: 1, auditId: 'fake-partner-role' };
   }
 
   private accountingRead<T>(read: () => T): ExecutionResult<T> {
@@ -251,9 +272,34 @@ export class FakeERPConnector implements IERPConnector {
     return { success: true, data: { orderId: 1, state: 'draft' }, durationMs: 1, auditId: 'fake' };
   }
 
+  async createDraftVendorBill(
+    payload: { vendorId: string | number; vendorBillReference: string; billDate: string; currency: string; lines: Array<{ description: string; quantity: string; unitPrice: string }> },
+    idempotencyKey: string,
+  ): Promise<ExecutionResult<{ vendorBillId: string | number; vendorBillReference: string; vendorId: string | number; currency: string; totalAmount: string; documentKind: 'vendor_bill'; moveType: 'in_invoice'; state: 'draft' }>> {
+    const start = Date.now();
+    const behavior = this.vendorBillBehaviorQueue.shift() ?? 'success';
+    if (behavior === 'transient_error') throw new Error('ETIMEDOUT: simulated vendor bill failure before write.');
+    if (behavior === 'validation_error') return { success: false, error: { code: 'VALIDATION_ERROR', message: 'Synthetic vendor validation failed.' }, durationMs: Date.now() - start, auditId: `fake-${Date.now()}` };
+    if (this.vendorBills.some((bill) => bill.vendorBillReference === payload.vendorBillReference)) {
+      return { success: false, error: { code: 'DUPLICATE_VENDOR_REFERENCE', message: 'Vendor bill reference already exists.' }, durationMs: Date.now() - start, auditId: `fake-${Date.now()}` };
+    }
+    const currency = payload.currency.toUpperCase();
+    const scale = createMoney('0', currency).scale;
+    let total = createMoney('0', currency, scale);
+    for (const line of payload.lines) total = MoneyMath.add(total, MoneyMath.multiply(createMoney(line.unitPrice, currency), line.quantity, scale));
+    const bill: FakeVendorBillRecord = { id: this.vendorBills.length + 1, ...payload, currency, totalAmount: total.amount, documentKind: 'vendor_bill', moveType: 'in_invoice', state: 'draft', idempotencyKey };
+    this.vendorBills.push(bill);
+    if (behavior === 'crash_after_write') throw new Error('ECONNRESET: synthetic crash after vendor bill write.');
+    return { success: true, data: { vendorBillId: bill.id, vendorBillReference: bill.vendorBillReference, vendorId: bill.vendorId, currency, totalAmount: total.amount, documentKind: bill.documentKind, moveType: bill.moveType, state: bill.state }, durationMs: Date.now() - start, auditId: `fake-vendor-bill-${bill.id}` };
+  }
+
   async findByIdempotencyKey(entityId: string, idempotencyKey: string): Promise<ExecutionResult<any | null>> {
     const start = Date.now();
     if (entityId !== 'invoice') {
+      if (entityId === 'vendor_bill') {
+        const found = this.vendorBills.find((bill) => bill.idempotencyKey === idempotencyKey) ?? null;
+        return { success: true, data: found, durationMs: Date.now() - start, auditId: `fake-${Date.now()}` };
+      }
       return { success: true, data: null, durationMs: Date.now() - start, auditId: `fake-${Date.now()}` };
     }
     const found = this.invoices.find((i) => i.idempotencyKey === idempotencyKey) ?? null;

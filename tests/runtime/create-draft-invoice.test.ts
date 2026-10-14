@@ -32,6 +32,7 @@ describe('create_draft_invoice workflow — happy path', () => {
     expect(t.status).toBe('succeeded');
     expect(t.result?.outcome).toBe('succeeded');
     expect(t.result?.unresolvedIssues).toEqual([]);
+    expect(t.result?.receipt).toMatchObject({ documentKind: 'customer_invoice', erpRecordId: expect.any(Number), partnerRole: 'customer', verifiedTotal: '200', approvedActionHash: expect.stringMatching(/^[0-9a-f]{64}$/), verificationSource: 'custom', unresolvedIssues: [] });
 
     const connector = deps.connector as FakeERPConnector;
     expect(connector.getCreatedInvoices()).toHaveLength(1);
