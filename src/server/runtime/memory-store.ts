@@ -46,7 +46,7 @@ export class InMemoryTaskStore implements TaskStore {
     return { ...task };
   }
 
-  async updateTask(tenantId: string, taskId: string, patch: Partial<Pick<Task, 'status' | 'result'>>): Promise<Task> {
+  async updateTask(tenantId: string, taskId: string, patch: Partial<Pick<Task, 'status' | 'result' | 'riskClass'>>): Promise<Task> {
     const task = this.tasks.get(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
     if (task.tenantId !== tenantId) throw new TenantIsolationError();
@@ -55,7 +55,9 @@ export class InMemoryTaskStore implements TaskStore {
     return { ...updated };
   }
 
-  async createStep(step: Omit<TaskStep, 'status' | 'attempt'> & { status?: TaskStep['status']; attempt?: number }): Promise<TaskStep> {
+  async createStep(tenantId: string, step: Omit<TaskStep, 'status' | 'attempt'> & { status?: TaskStep['status']; attempt?: number }): Promise<TaskStep> {
+    const parent = await this.getTask(tenantId, step.taskId);
+    if (!parent) throw new TenantIsolationError('Task not found for this tenant.');
     const full: TaskStep = { status: 'pending', attempt: 0, ...step };
     this.steps.set(full.id, full);
     const list = this.stepsByTask.get(full.taskId) ?? [];
@@ -64,13 +66,17 @@ export class InMemoryTaskStore implements TaskStore {
     return { ...full };
   }
 
-  async getStep(taskId: string, stepId: string): Promise<TaskStep | null> {
+  async getStep(tenantId: string, taskId: string, stepId: string): Promise<TaskStep | null> {
+    const task = await this.getTask(tenantId, taskId);
+    if (!task) return null;
     const step = this.steps.get(stepId);
     if (!step || step.taskId !== taskId) return null;
     return { ...step };
   }
 
-  async listSteps(taskId: string): Promise<TaskStep[]> {
+  async listSteps(tenantId: string, taskId: string): Promise<TaskStep[]> {
+    const task = await this.getTask(tenantId, taskId);
+    if (!task) return [];
     const ids = this.stepsByTask.get(taskId) ?? [];
     return ids
       .map((id) => this.steps.get(id))
@@ -79,7 +85,9 @@ export class InMemoryTaskStore implements TaskStore {
       .map((s) => ({ ...s }));
   }
 
-  async updateStep(taskId: string, stepId: string, patch: Partial<TaskStep>): Promise<TaskStep> {
+  async updateStep(tenantId: string, taskId: string, stepId: string, patch: Partial<TaskStep>): Promise<TaskStep> {
+    const task = await this.getTask(tenantId, taskId);
+    if (!task) throw new TenantIsolationError();
     const step = this.steps.get(stepId);
     if (!step || step.taskId !== taskId) throw new Error(`Step ${stepId} not found on task ${taskId}`);
     const updated: TaskStep = { ...step, ...patch };
@@ -87,10 +95,13 @@ export class InMemoryTaskStore implements TaskStore {
     return { ...updated };
   }
 
-  async appendEvent(event: Omit<TaskEvent, 'id' | 'sequence' | 'createdAt'>): Promise<TaskEvent> {
+  async appendEvent(tenantId: string, event: Omit<TaskEvent, 'id' | 'tenantId' | 'sequence' | 'createdAt'>): Promise<TaskEvent> {
+    const task = await this.getTask(tenantId, event.taskId);
+    if (!task) throw new TenantIsolationError();
     const list = this.events.get(event.taskId) ?? [];
     const full: TaskEvent = {
       ...event,
+      tenantId,
       // Redacted here, at the actual persistence boundary — not left to
       // every call site in executor.ts to remember. See redact.ts.
       payload: redact(event.payload),
@@ -103,11 +114,16 @@ export class InMemoryTaskStore implements TaskStore {
     return { ...full };
   }
 
-  async listEvents(taskId: string): Promise<TaskEvent[]> {
+  async listEvents(tenantId: string, taskId: string): Promise<TaskEvent[]> {
+    const task = await this.getTask(tenantId, taskId);
+    if (!task) return [];
     return (this.events.get(taskId) ?? []).map((e) => ({ ...e }));
   }
 
-  async createApproval(approval: Omit<ApprovalRequest, 'status' | 'requestedAt'>): Promise<ApprovalRequest> {
+  async createApproval(tenantId: string, approval: Omit<ApprovalRequest, 'status' | 'requestedAt'>): Promise<ApprovalRequest> {
+    if (approval.tenantId !== tenantId || !(await this.getTask(tenantId, approval.taskId)) || !(await this.getStep(tenantId, approval.taskId, approval.stepId))) {
+      throw new TenantIsolationError('Approval parent is missing or belongs to another tenant.');
+    }
     const full: ApprovalRequest = { ...approval, status: 'pending', requestedAt: new Date() };
     this.approvals.set(full.id, full);
     return { ...full };
@@ -161,10 +177,20 @@ export class InMemoryTaskStore implements TaskStore {
   }
 
   async startIdempotencyRecord(
+    tenantId: string,
     record: Omit<IdempotencyRecord, 'status' | 'createdAt' | 'updatedAt' | 'resultRef'>,
   ): Promise<IdempotencyRecord> {
+    if (record.tenantId !== tenantId) throw new TenantIsolationError();
     const key = this.idemKey(record.tenantId, record.toolName, record.idempotencyKey);
     const now = new Date();
+    const existing = this.idempotency.get(key);
+    if (existing) {
+      if (existing.requestHash !== record.requestHash) throw new Error('Idempotency key reused with a different request.');
+      if (existing.status !== 'failed') throw new Error('Idempotency record already exists.');
+      const retried: IdempotencyRecord = { ...existing, status: 'in_progress', updatedAt: now };
+      this.idempotency.set(key, retried);
+      return { ...retried };
+    }
     const full: IdempotencyRecord = { ...record, status: 'in_progress', createdAt: now, updatedAt: now };
     this.idempotency.set(key, full);
     return { ...full };

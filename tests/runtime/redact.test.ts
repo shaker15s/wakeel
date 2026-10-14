@@ -58,7 +58,7 @@ describe('redact() — enforced at the actual persistence boundary', () => {
       deadline: new Date(Date.now() + 1000 * 60),
     });
 
-    await store.appendEvent({
+    await store.appendEvent(task.tenantId, {
       taskId: task.id,
       type: 'task_status_changed',
       actorType: 'system',
@@ -70,7 +70,7 @@ describe('redact() — enforced at the actual persistence boundary', () => {
       },
     });
 
-    const events = await store.listEvents(task.id);
+    const events = await store.listEvents(task.tenantId, task.id);
     const serialized = JSON.stringify(events);
     expect(serialized).not.toContain('sk-live-should-never-appear');
     expect(events[0].payload).toEqual({

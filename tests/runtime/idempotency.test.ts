@@ -20,7 +20,7 @@ function makeNoReconcileConnector(): FakeERPConnector {
 async function runToApproved(deps: ReturnType<typeof makeDeps>) {
   const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
   await advance(deps, TENANT_A, task.id);
-  const steps = await deps.store.listSteps(task.id);
+  const steps = await deps.store.listSteps(task.tenantId, task.id);
   const approvalId = (steps.find((s) => s.name === 'await_approval')!.output as { approvalId: string }).approvalId;
   await deps.store.decideApproval(TENANT_A, approvalId, 'approved', HUMAN_APPROVER);
   return task;
@@ -116,9 +116,9 @@ describe('idempotency and crash recovery', () => {
     // record) had already completed, but before step-level bookkeeping was
     // durably updated to reflect that. This models a real crash window; the
     // public store API has no way to force it directly in a single call.
-    const steps = await deps.store.listSteps(task.id);
+    const steps = await deps.store.listSteps(task.tenantId, task.id);
     const execStep = steps.find((s) => s.name === 'execute_write')!;
-    await deps.store.updateStep(task.id, execStep.id, { status: 'pending' });
+    await deps.store.updateStep(task.tenantId, task.id, execStep.id, { status: 'pending' });
     await deps.store.updateTask(TENANT_A, task.id, { status: 'running' });
 
     const again = await advance(deps, TENANT_A, task.id);
@@ -133,7 +133,7 @@ describe('idempotency and crash recovery', () => {
     const task = await runToApproved(deps);
     await advance(deps, TENANT_A, task.id); // completes normally, hash H recorded for this task's key
 
-    const steps = await deps.store.listSteps(task.id);
+    const steps = await deps.store.listSteps(task.tenantId, task.id);
     const execStep = steps.find((s) => s.name === 'execute_write')!;
     // Corrupt the recorded request hash to simulate the same idempotency key
     // somehow being associated with a different request (should never
@@ -150,7 +150,7 @@ describe('idempotency and crash recovery', () => {
     const mapKey = `${TENANT_A}::create_draft_invoice::${key}`;
     rawMap.get(mapKey)!.requestHash = 'tampered-hash';
 
-    await deps.store.updateStep(task.id, execStep.id, { status: 'pending' });
+    await deps.store.updateStep(task.tenantId, task.id, execStep.id, { status: 'pending' });
     await deps.store.updateTask(TENANT_A, task.id, { status: 'running' });
 
     const result = await advance(deps, TENANT_A, task.id);

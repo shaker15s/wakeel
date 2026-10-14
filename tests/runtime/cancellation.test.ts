@@ -20,7 +20,7 @@ describe('cancellation', () => {
     // task — a UI building its view from the approval's status alone (as
     // the demo surface does) would otherwise keep showing an approve/reject
     // card for a task that is already over.
-    const steps = await deps.store.listSteps(task.id);
+    const steps = await deps.store.listSteps(task.tenantId, task.id);
     const approvalId = (steps.find((s) => s.name === 'await_approval')!.output as { approvalId: string }).approvalId;
     const approval = await deps.store.getApproval(TENANT_A, approvalId);
     expect(approval?.status).toBe('rejected');
@@ -29,10 +29,10 @@ describe('cancellation', () => {
     const afterAdvance = await advance(deps, TENANT_A, task.id);
     expect(afterAdvance.status).toBe('cancelled');
 
-    const eventsBefore = (await deps.store.listEvents(task.id)).length;
+    const eventsBefore = (await deps.store.listEvents(task.tenantId, task.id)).length;
     const cancelledAgain = await cancelTask(deps, TENANT_A, task.id, ACTOR, 'trying again');
     expect(cancelledAgain.status).toBe('cancelled');
-    const eventsAfter = (await deps.store.listEvents(task.id)).length;
+    const eventsAfter = (await deps.store.listEvents(task.tenantId, task.id)).length;
     expect(eventsAfter).toBe(eventsBefore); // no duplicate event from re-cancelling a terminal task
   });
 
@@ -41,7 +41,7 @@ describe('cancellation', () => {
     const connector = deps.connector as FakeERPConnector;
     const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
     await advance(deps, TENANT_A, task.id);
-    const steps = await deps.store.listSteps(task.id);
+    const steps = await deps.store.listSteps(task.tenantId, task.id);
     const approvalId = (steps.find((s) => s.name === 'await_approval')!.output as { approvalId: string }).approvalId;
     await deps.store.decideApproval(TENANT_A, approvalId, 'approved', HUMAN_APPROVER);
     const succeeded = await advance(deps, TENANT_A, task.id);

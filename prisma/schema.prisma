@@ -142,3 +142,103 @@ model ChatMessage {
 
   @@index([userId])
 }
+
+// Durable WAKIL accounting execution. Every child table carries tenantId so
+// application queries can enforce isolation without trusting a task/step id.
+model RuntimeTask {
+  id           String              @id
+  tenantId     String
+  actorId      String
+  workflowType String
+  status       String
+  riskClass    String
+  inputJson    String
+  resultJson   String?
+  deadline     DateTime
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  steps        RuntimeTaskStep[]
+  approvals    RuntimeApproval[]
+  events       RuntimeTaskEvent[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status, updatedAt])
+}
+
+model RuntimeTaskStep {
+  id          String      @id
+  tenantId    String
+  taskId      String
+  sequence    Int
+  name        String
+  status      String
+  attempt     Int
+  maxAttempts Int
+  inputJson   String?
+  outputJson  String?
+  errorCode   String?
+  errorMessage String?
+  idempotencyKey String?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  task        RuntimeTask @relation(fields: [tenantId, taskId], references: [tenantId, id], onDelete: Cascade)
+  approvals   RuntimeApproval[]
+
+  @@unique([tenantId, taskId, id])
+  @@unique([taskId, sequence])
+  @@index([tenantId, taskId, status])
+}
+
+model RuntimeApproval {
+  id               String          @id
+  tenantId         String
+  taskId           String
+  stepId           String
+  toolName         String
+  actionHash       String
+  normalizedParamsJson String
+  policyVersion    String
+  riskLevel        String
+  summary          String
+  status           String
+  requestedAt      DateTime        @default(now())
+  expiresAt        DateTime
+  decidedBy        String?
+  decidedAt        DateTime?
+  reason           String?
+  task             RuntimeTask     @relation(fields: [tenantId, taskId], references: [tenantId, id], onDelete: Cascade)
+  step             RuntimeTaskStep @relation(fields: [tenantId, taskId, stepId], references: [tenantId, taskId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status, expiresAt])
+}
+
+model RuntimeTaskEvent {
+  id        String      @id
+  tenantId  String
+  taskId    String
+  sequence  Int
+  type      String
+  actorType String
+  actorId   String?
+  payloadJson String
+  createdAt DateTime    @default(now())
+  task      RuntimeTask @relation(fields: [tenantId, taskId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([taskId, sequence])
+  @@index([tenantId, taskId, sequence])
+}
+
+model RuntimeIdempotencyRecord {
+  tenantId      String
+  toolName      String
+  idempotencyKey String
+  requestHash   String
+  status        String
+  resultRefJson String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@id([tenantId, toolName, idempotencyKey])
+  @@index([tenantId, status, updatedAt])
+}

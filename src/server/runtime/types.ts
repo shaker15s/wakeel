@@ -100,6 +100,7 @@ export type TaskEventType =
 
 export interface TaskEvent {
   id: string;
+  tenantId: string;
   taskId: string;
   sequence: number;
   type: TaskEventType;
@@ -152,15 +153,15 @@ export interface TaskStore {
   getTask(tenantId: string, taskId: string): Promise<Task | null>;
   updateTask(tenantId: string, taskId: string, patch: Partial<Pick<Task, 'status' | 'result' | 'riskClass'>>): Promise<Task>;
 
-  createStep(step: Omit<TaskStep, 'status' | 'attempt'> & { status?: StepStatus; attempt?: number }): Promise<TaskStep>;
-  getStep(taskId: string, stepId: string): Promise<TaskStep | null>;
-  listSteps(taskId: string): Promise<TaskStep[]>;
-  updateStep(taskId: string, stepId: string, patch: Partial<TaskStep>): Promise<TaskStep>;
+  createStep(tenantId: string, step: Omit<TaskStep, 'status' | 'attempt'> & { status?: StepStatus; attempt?: number }): Promise<TaskStep>;
+  getStep(tenantId: string, taskId: string, stepId: string): Promise<TaskStep | null>;
+  listSteps(tenantId: string, taskId: string): Promise<TaskStep[]>;
+  updateStep(tenantId: string, taskId: string, stepId: string, patch: Partial<TaskStep>): Promise<TaskStep>;
 
-  appendEvent(event: Omit<TaskEvent, 'id' | 'sequence' | 'createdAt'>): Promise<TaskEvent>;
-  listEvents(taskId: string): Promise<TaskEvent[]>;
+  appendEvent(tenantId: string, event: Omit<TaskEvent, 'id' | 'tenantId' | 'sequence' | 'createdAt'>): Promise<TaskEvent>;
+  listEvents(tenantId: string, taskId: string): Promise<TaskEvent[]>;
 
-  createApproval(approval: Omit<ApprovalRequest, 'status' | 'requestedAt'>): Promise<ApprovalRequest>;
+  createApproval(tenantId: string, approval: Omit<ApprovalRequest, 'status' | 'requestedAt'>): Promise<ApprovalRequest>;
   getApproval(tenantId: string, approvalId: string): Promise<ApprovalRequest | null>;
   /** Human-decision-only entrypoint. Never called from executor/model code paths. */
   decideApproval(
@@ -172,7 +173,7 @@ export interface TaskStore {
   ): Promise<ApprovalRequest>;
 
   getIdempotencyRecord(tenantId: string, toolName: string, idempotencyKey: string): Promise<IdempotencyRecord | null>;
-  startIdempotencyRecord(record: Omit<IdempotencyRecord, 'status' | 'createdAt' | 'updatedAt' | 'resultRef'>): Promise<IdempotencyRecord>;
+  startIdempotencyRecord(tenantId: string, record: Omit<IdempotencyRecord, 'status' | 'createdAt' | 'updatedAt' | 'resultRef'>): Promise<IdempotencyRecord>;
   completeIdempotencyRecord(tenantId: string, toolName: string, idempotencyKey: string, resultRef: unknown): Promise<IdempotencyRecord>;
   failIdempotencyRecord(tenantId: string, toolName: string, idempotencyKey: string): Promise<IdempotencyRecord>;
 }

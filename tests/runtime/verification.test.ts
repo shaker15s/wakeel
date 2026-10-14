@@ -10,7 +10,7 @@ describe('verification', () => {
 
     const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
     await advance(deps, TENANT_A, task.id);
-    const steps = await deps.store.listSteps(task.id);
+    const steps = await deps.store.listSteps(task.tenantId, task.id);
     const approvalId = (steps.find((s) => s.name === 'await_approval')!.output as { approvalId: string }).approvalId;
     await deps.store.decideApproval(TENANT_A, approvalId, 'approved', HUMAN_APPROVER);
 
@@ -35,7 +35,7 @@ describe('verification', () => {
 
     const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
     await advance(deps, TENANT_A, task.id);
-    const steps = await deps.store.listSteps(task.id);
+    const steps = await deps.store.listSteps(task.tenantId, task.id);
     const approvalId = (steps.find((s) => s.name === 'await_approval')!.output as { approvalId: string }).approvalId;
     await deps.store.decideApproval(TENANT_A, approvalId, 'approved', HUMAN_APPROVER);
 

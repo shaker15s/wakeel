@@ -62,7 +62,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     const existing = await deps.store.getTask(tenantId, taskId);
     if (!existing) return jsonError(404, 'Task not found.');
 
-    const steps = await deps.store.listSteps(taskId);
+    const steps = await deps.store.listSteps(tenantId, taskId);
     const approvalStep = steps.find((s) => s.name === 'await_approval');
     const approvalId = (approvalStep?.output as { approvalId?: string } | undefined)?.approvalId;
     if (!approvalId) return jsonError(409, 'This task has no pending approval to decide.');

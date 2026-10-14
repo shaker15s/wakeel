@@ -78,8 +78,8 @@ const ACTOR = 'eval-actor';
 const APPROVER = 'eval-approver';
 const VALID_INPUT = { customerId: 'cust-eval-1', lines: [{ description: 'Consulting services', quantity: 2, unitPrice: 100 }] };
 
-async function approvalIdOf(deps: ExecutorDeps, taskId: string): Promise<string> {
-  const steps = await deps.store.listSteps(taskId);
+async function approvalIdOf(deps: ExecutorDeps, tenantId: string, taskId: string): Promise<string> {
+  const steps = await deps.store.listSteps(tenantId, taskId);
   const step = steps.find((s: TaskStep) => s.name === 'await_approval');
   if (!step) throw new Error('await_approval step not found — workflow shape changed?');
   return (step.output as { approvalId: string }).approvalId;
@@ -144,9 +144,9 @@ export function buildScenarios(): ScenarioDescriptor[] {
         const connector = deps.connector as FakeERPConnector;
         const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
         await advance(deps, TENANT_A, task.id);
-        await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, task.id), 'approved', APPROVER);
+        await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, TENANT_A, task.id), 'approved', APPROVER);
         const t = await advance(deps, TENANT_A, task.id);
-        const events = await deps.store.listEvents(task.id);
+        const events = await deps.store.listEvents(task.tenantId, task.id);
         const passed = t.status === 'succeeded' && connector.getCreatedInvoices().length === 1;
         return {
           passed,
@@ -164,7 +164,7 @@ export function buildScenarios(): ScenarioDescriptor[] {
         const connector = deps.connector as FakeERPConnector;
         const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: { customerId: 'cust-1', lines: [] } });
         const t = await advance(deps, TENANT_A, task.id);
-        const events = await deps.store.listEvents(task.id);
+        const events = await deps.store.listEvents(task.tenantId, task.id);
         const passed = t.status === 'failed' && (t.result?.unresolvedIssues[0] ?? '').startsWith('invalid_input:') && connector.getCreatedInvoices().length === 0;
         return {
           passed,
@@ -186,7 +186,7 @@ export function buildScenarios(): ScenarioDescriptor[] {
           input: { customerId: 'cust-1', lines: [{ description: 'Bad line', quantity: -5, unitPrice: 10 }] },
         });
         const t = await advance(deps, TENANT_A, task.id);
-        const events = await deps.store.listEvents(task.id);
+        const events = await deps.store.listEvents(task.tenantId, task.id);
         const passed = t.status === 'failed' && (t.result?.unresolvedIssues[0] ?? '').startsWith('invalid_input:') && connector.getCreatedInvoices().length === 0;
         return {
           passed,
@@ -214,7 +214,7 @@ export function buildScenarios(): ScenarioDescriptor[] {
         try {
           const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
           const t = await advance(deps, TENANT_A, task.id);
-          const events = await deps.store.listEvents(task.id);
+          const events = await deps.store.listEvents(task.tenantId, task.id);
           const passed = t.status === 'failed' && (t.result?.unresolvedIssues[0] ?? '').startsWith('policy_denied:') && connector.getCreatedInvoices().length === 0;
           return {
             passed,
@@ -235,9 +235,9 @@ export function buildScenarios(): ScenarioDescriptor[] {
         const connector = deps.connector as FakeERPConnector;
         const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
         await advance(deps, TENANT_A, task.id);
-        await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, task.id), 'rejected', APPROVER, 'amount looks wrong');
+        await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, TENANT_A, task.id), 'rejected', APPROVER, 'amount looks wrong');
         const t = await advance(deps, TENANT_A, task.id);
-        const events = await deps.store.listEvents(task.id);
+        const events = await deps.store.listEvents(task.tenantId, task.id);
         const passed = t.status === 'failed' && (t.result?.unresolvedIssues ?? []).includes('approval_rejected') && connector.getCreatedInvoices().length === 0;
         return {
           passed,
@@ -257,7 +257,7 @@ export function buildScenarios(): ScenarioDescriptor[] {
         await advance(deps, TENANT_A, task.id);
         await new Promise((r) => setTimeout(r, 30));
         const t = await advance(deps, TENANT_A, task.id);
-        const events = await deps.store.listEvents(task.id);
+        const events = await deps.store.listEvents(task.tenantId, task.id);
         const passed = t.status === 'failed' && (t.result?.unresolvedIssues ?? []).includes('approval_expired') && connector.getCreatedInvoices().length === 0;
         return {
           passed,
@@ -276,9 +276,9 @@ export function buildScenarios(): ScenarioDescriptor[] {
         connector.queueInvoiceBehavior('transient_error');
         const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
         await advance(deps, TENANT_A, task.id);
-        await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, task.id), 'approved', APPROVER);
+        await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, TENANT_A, task.id), 'approved', APPROVER);
         const t = await advance(deps, TENANT_A, task.id);
-        const events = await deps.store.listEvents(task.id);
+        const events = await deps.store.listEvents(task.tenantId, task.id);
         const passed = t.status === 'succeeded' && connector.getCreatedInvoices().length === 1;
         return {
           passed,
@@ -299,9 +299,9 @@ export function buildScenarios(): ScenarioDescriptor[] {
         connector.queueInvoiceBehavior('transient_error');
         const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
         await advance(deps, TENANT_A, task.id);
-        await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, task.id), 'approved', APPROVER);
+        await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, TENANT_A, task.id), 'approved', APPROVER);
         const t = await advance(deps, TENANT_A, task.id);
-        const events = await deps.store.listEvents(task.id);
+        const events = await deps.store.listEvents(task.tenantId, task.id);
         const passed = t.status === 'failed' && (t.result?.unresolvedIssues ?? []).includes('retry_exhausted') && connector.getCreatedInvoices().length === 0;
         return {
           passed,
@@ -324,9 +324,9 @@ export function buildScenarios(): ScenarioDescriptor[] {
           connector.queueInvoiceBehavior('crash_after_write');
           const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
           await advance(deps, TENANT_A, task.id);
-          await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, task.id), 'approved', APPROVER);
+          await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, TENANT_A, task.id), 'approved', APPROVER);
           const t = await advance(deps, TENANT_A, task.id);
-          const events = await deps.store.listEvents(task.id);
+          const events = await deps.store.listEvents(task.tenantId, task.id);
           const passed = t.status === 'succeeded' && connector.getCreatedInvoices().length === 1;
           return {
             passed,
@@ -349,14 +349,14 @@ export function buildScenarios(): ScenarioDescriptor[] {
           const connector = deps.connector as FakeERPConnector;
           const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
           await advance(deps, TENANT_A, task.id);
-          await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, task.id), 'approved', APPROVER);
+          await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, TENANT_A, task.id), 'approved', APPROVER);
           await advance(deps, TENANT_A, task.id);
-          const steps = await deps.store.listSteps(task.id);
+          const steps = await deps.store.listSteps(task.tenantId, task.id);
           const execStep = steps.find((s) => s.name === 'execute_write')!;
-          await deps.store.updateStep(task.id, execStep.id, { status: 'pending' });
+          await deps.store.updateStep(task.tenantId, task.id, execStep.id, { status: 'pending' });
           await deps.store.updateTask(TENANT_A, task.id, { status: 'running' });
           const t = await advance(deps, TENANT_A, task.id);
-          const events = await deps.store.listEvents(task.id);
+          const events = await deps.store.listEvents(task.tenantId, task.id);
           const passed = t.status === 'succeeded' && connector.getCreatedInvoices().length === 1;
           return {
             passed,
@@ -379,10 +379,10 @@ export function buildScenarios(): ScenarioDescriptor[] {
           const connector = deps.connector as FakeERPConnector;
           const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
           await advance(deps, TENANT_A, task.id);
-          await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, task.id), 'approved', APPROVER);
+          await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, TENANT_A, task.id), 'approved', APPROVER);
           connector.simulateVerificationDrift({ customerId: 'someone-else' });
           const t = await advance(deps, TENANT_A, task.id);
-          const events = await deps.store.listEvents(task.id);
+          const events = await deps.store.listEvents(task.tenantId, task.id);
           const passed =
             t.status === 'partially_succeeded' &&
             (t.result?.unresolvedIssues ?? []).includes('customerId_mismatch') &&
@@ -408,14 +408,14 @@ export function buildScenarios(): ScenarioDescriptor[] {
           const connector = deps.connector as FakeERPConnector;
           const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
           await advance(deps, TENANT_A, task.id);
-          await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, task.id), 'approved', APPROVER);
+          await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, TENANT_A, task.id), 'approved', APPROVER);
           const original = connector.getEntityById.bind(connector);
           connector.getEntityById = async (entityId: string, id: string | number) => {
             if (entityId === 'invoice') return { success: true, data: null, durationMs: 1, auditId: 'eval-forced-not-found' };
             return original(entityId, id);
           };
           const t = await advance(deps, TENANT_A, task.id);
-          const events = await deps.store.listEvents(task.id);
+          const events = await deps.store.listEvents(task.tenantId, task.id);
           const passed = t.status === 'partially_succeeded' && (t.result?.unresolvedIssues[0] ?? '').startsWith('verification_read_failed');
           return {
             passed,
@@ -447,7 +447,7 @@ export function buildScenarios(): ScenarioDescriptor[] {
           }
 
           await advance(deps, TENANT_A, task.id);
-          const approvalId = await approvalIdOf(deps, task.id);
+          const approvalId = await approvalIdOf(deps, TENANT_A, task.id);
           const approvalReadByB = await deps.store.getApproval(TENANT_B, approvalId);
           let decideByBThrew = false;
           try {
@@ -457,7 +457,7 @@ export function buildScenarios(): ScenarioDescriptor[] {
           }
           const stillPending = await deps.store.getApproval(TENANT_A, approvalId);
 
-          const events = await deps.store.listEvents(task.id);
+          const events = await deps.store.listEvents(task.tenantId, task.id);
           const passed =
             readByB === null &&
             advanceByBThrew &&
@@ -485,12 +485,12 @@ export function buildScenarios(): ScenarioDescriptor[] {
           const connector = deps.connector as FakeERPConnector;
           const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
           await advance(deps, TENANT_A, task.id);
-          const approvalId = await approvalIdOf(deps, task.id);
+          const approvalId = await approvalIdOf(deps, TENANT_A, task.id);
           const rawApprovals = (deps.store as unknown as { approvals: Map<string, { actionHash: string }> }).approvals;
           rawApprovals.get(approvalId)!.actionHash = '0'.repeat(64);
           await deps.store.decideApproval(TENANT_A, approvalId, 'approved', APPROVER);
           const t = await advance(deps, TENANT_A, task.id);
-          const events = await deps.store.listEvents(task.id);
+          const events = await deps.store.listEvents(task.tenantId, task.id);
           const passed =
             t.status === 'failed' &&
             (t.result?.unresolvedIssues ?? []).includes('action_hash_mismatch_at_execution') &&
@@ -516,18 +516,18 @@ export function buildScenarios(): ScenarioDescriptor[] {
           const connector = deps.connector as FakeERPConnector;
           const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
           await advance(deps, TENANT_A, task.id);
-          await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, task.id), 'approved', APPROVER);
+          await deps.store.decideApproval(TENANT_A, await approvalIdOf(deps, TENANT_A, task.id), 'approved', APPROVER);
           await advance(deps, TENANT_A, task.id);
-          const steps = await deps.store.listSteps(task.id);
+          const steps = await deps.store.listSteps(task.tenantId, task.id);
           const execStep = steps.find((s) => s.name === 'execute_write')!;
           const key = `task:${task.id}:execute_write`;
           const rawMap = (deps.store as unknown as { idempotency: Map<string, { requestHash: string }> }).idempotency;
           const mapKey = `${TENANT_A}::create_draft_invoice::${key}`;
           rawMap.get(mapKey)!.requestHash = 'eval-tampered-hash';
-          await deps.store.updateStep(task.id, execStep.id, { status: 'pending' });
+          await deps.store.updateStep(task.tenantId, task.id, execStep.id, { status: 'pending' });
           await deps.store.updateTask(TENANT_A, task.id, { status: 'running' });
           const t = await advance(deps, TENANT_A, task.id);
-          const events = await deps.store.listEvents(task.id);
+          const events = await deps.store.listEvents(task.tenantId, task.id);
           const passed = t.status === 'failed' && (t.result?.unresolvedIssues ?? []).includes('idempotency_key_reused_with_different_request');
           return {
             passed,
@@ -551,7 +551,7 @@ export function buildScenarios(): ScenarioDescriptor[] {
         const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
         await advance(deps, TENANT_A, task.id); // now waiting_for_approval
         const t = await cancelTask(deps, TENANT_A, task.id, ACTOR, 'eval: cancelling before approval');
-        const events = await deps.store.listEvents(task.id);
+        const events = await deps.store.listEvents(task.tenantId, task.id);
         const passed =
           t.status === 'cancelled' &&
           (t.result?.unresolvedIssues ?? []).includes('cancelled_by_actor') &&

@@ -50,8 +50,8 @@ function viewApproval(approval: ApprovalRequest): ApprovalView {
 export async function buildTaskView(store: TaskStore, tenantId: string, taskId: string): Promise<TaskView | null> {
   const task = await store.getTask(tenantId, taskId);
   if (!task) return null;
-  const steps = await store.listSteps(taskId);
-  const events = await store.listEvents(taskId);
+  const steps = await store.listSteps(tenantId, taskId);
+  const events = await store.listEvents(tenantId, taskId);
 
   let pendingApproval: ApprovalView | null = null;
   const approvalStep = steps.find((s) => s.name === 'await_approval');

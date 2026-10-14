@@ -15,6 +15,11 @@ const EXPECTED_MODELS = [
   'chatMessage',
   'automationRun',
   'shareLink',
+  'runtimeTask',
+  'runtimeTaskStep',
+  'runtimeApproval',
+  'runtimeTaskEvent',
+  'runtimeIdempotencyRecord',
 ] as const
 
 function isStale(client: PrismaClient): boolean {

@@ -57,7 +57,7 @@ export async function createCreateDraftInvoiceTask(deps: ExecutorDeps, params: C
   });
 
   for (let i = 0; i < CREATE_DRAFT_INVOICE_STEPS.length; i++) {
-    await deps.store.createStep({
+    await deps.store.createStep(params.tenantId, {
       id: randomUUID(),
       taskId,
       sequence: i + 1,
@@ -66,7 +66,7 @@ export async function createCreateDraftInvoiceTask(deps: ExecutorDeps, params: C
     });
   }
 
-  await deps.store.appendEvent({
+  await deps.store.appendEvent(params.tenantId, {
     taskId,
     type: 'task_created',
     actorType: 'human',
@@ -78,7 +78,7 @@ export async function createCreateDraftInvoiceTask(deps: ExecutorDeps, params: C
 }
 
 async function fail(deps: ExecutorDeps, tenantId: string, taskId: string, summary: string, unresolvedIssues: string[]): Promise<Task> {
-  await deps.store.appendEvent({
+  await deps.store.appendEvent(tenantId, {
     taskId,
     type: 'task_status_changed',
     actorType: 'system',
@@ -97,7 +97,7 @@ async function partiallySucceed(
   summary: string,
   unresolvedIssues: string[],
 ): Promise<Task> {
-  await deps.store.appendEvent({
+  await deps.store.appendEvent(tenantId, {
     taskId,
     type: 'task_status_changed',
     actorType: 'system',
@@ -110,7 +110,7 @@ async function partiallySucceed(
 }
 
 async function succeed(deps: ExecutorDeps, tenantId: string, taskId: string, summary: string): Promise<Task> {
-  await deps.store.appendEvent({
+  await deps.store.appendEvent(tenantId, {
     taskId,
     type: 'task_status_changed',
     actorType: 'system',
@@ -147,7 +147,7 @@ export async function cancelTask(
   if (!task) throw new Error(`Task ${taskId} not found for tenant ${tenantId}`);
   if (TERMINAL_TASK_STATUSES.has(task.status)) return task;
 
-  const steps = await deps.store.listSteps(taskId);
+  const steps = await deps.store.listSteps(tenantId, taskId);
   const executeStep = steps.find((s) => s.name === 'execute_write');
   if (executeStep?.status === 'succeeded') {
     throw new Error(
@@ -168,7 +168,7 @@ export async function cancelTask(
     }
   }
 
-  await deps.store.appendEvent({
+  await deps.store.appendEvent(tenantId, {
     taskId,
     type: 'task_status_changed',
     actorType: 'human',
@@ -206,14 +206,14 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
     if (TERMINAL_TASK_STATUSES.has(task.status)) return task;
 
     if (task.deadline.getTime() < now.getTime()) {
-      await deps.store.appendEvent({ taskId, type: 'task_status_changed', actorType: 'system', payload: { status: 'expired' } });
+      await deps.store.appendEvent(tenantId, { taskId, type: 'task_status_changed', actorType: 'system', payload: { status: 'expired' } });
       return deps.store.updateTask(tenantId, taskId, {
         status: 'expired',
         result: { outcome: 'expired', summary: 'Task exceeded its deadline before completing.', unresolvedIssues: ['deadline_exceeded'] },
       });
     }
 
-    const steps = await deps.store.listSteps(taskId);
+    const steps = await deps.store.listSteps(tenantId, taskId);
     const current = steps.find((s) => s.status !== 'succeeded' && s.status !== 'skipped' && s.status !== 'failed');
     if (!current) {
       // All steps resolved without the per-step handlers setting a terminal
@@ -224,7 +224,7 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
     if (current.name === 'validate_input') {
       const parsed = createDraftInvoiceInputSchema.safeParse(task.input);
       if (!parsed.success) {
-        await deps.store.updateStep(taskId, current.id, {
+        await deps.store.updateStep(tenantId, taskId, current.id, {
           status: 'failed',
           errorCode: 'INVALID_INPUT',
           errorMessage: parsed.error.message,
@@ -234,7 +234,7 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
           `invalid_input: ${parsed.error.issues.map((i) => i.message).join('; ')}`,
         ]);
       }
-      await deps.store.updateStep(taskId, current.id, {
+      await deps.store.updateStep(tenantId, taskId, current.id, {
         status: 'succeeded',
         output: parsed.data,
         startedAt: now,
@@ -258,7 +258,7 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
       });
 
       if (!decision.allowed) {
-        await deps.store.updateStep(taskId, current.id, {
+        await deps.store.updateStep(tenantId, taskId, current.id, {
           status: 'failed',
           errorCode: 'POLICY_DENIED',
           errorMessage: decision.reason,
@@ -275,7 +275,7 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
         resourceRef,
       });
 
-      await deps.store.updateStep(taskId, current.id, {
+      await deps.store.updateStep(tenantId, taskId, current.id, {
         status: 'succeeded',
         output: { decision, actionHash, policyVersion: POLICY_VERSION, resourceRef },
         startedAt: now,
@@ -303,11 +303,11 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
           // v0 policy always requires approval for this workflow; this branch
           // exists only so a future, less-strict policy doesn't silently skip
           // human review by accident — it is explicit, not implicit.
-          await deps.store.updateStep(taskId, current.id, { status: 'skipped', startedAt: now, finishedAt: now });
+          await deps.store.updateStep(tenantId, taskId, current.id, { status: 'skipped', startedAt: now, finishedAt: now });
           task = await deps.store.getTask(tenantId, taskId) as Task;
           continue;
         }
-        const created = await deps.store.createApproval({
+        const created = await deps.store.createApproval(tenantId, {
           id: randomUUID(),
           taskId,
           stepId: current.id,
@@ -322,12 +322,12 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
         });
         approvalId = created.id;
         approval = created;
-        await deps.store.updateStep(taskId, current.id, {
+        await deps.store.updateStep(tenantId, taskId, current.id, {
           status: 'waiting_for_approval',
           output: { approvalId },
           startedAt: now,
         });
-        await deps.store.appendEvent({
+        await deps.store.appendEvent(tenantId, {
           taskId,
           type: 'approval_requested',
           actorType: 'system',
@@ -343,14 +343,14 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
       }
 
       if (approval.status === 'expired') {
-        await deps.store.updateStep(taskId, current.id, { status: 'failed', errorCode: 'APPROVAL_EXPIRED', finishedAt: now });
-        await deps.store.appendEvent({ taskId, type: 'approval_expired', actorType: 'system', payload: { approvalId } });
+        await deps.store.updateStep(tenantId, taskId, current.id, { status: 'failed', errorCode: 'APPROVAL_EXPIRED', finishedAt: now });
+        await deps.store.appendEvent(tenantId, { taskId, type: 'approval_expired', actorType: 'system', payload: { approvalId } });
         return fail(deps, tenantId, taskId, 'Approval request expired before a decision was made.', ['approval_expired']);
       }
 
       if (approval.status === 'rejected') {
-        await deps.store.updateStep(taskId, current.id, { status: 'failed', errorCode: 'APPROVAL_REJECTED', finishedAt: now });
-        await deps.store.appendEvent({
+        await deps.store.updateStep(tenantId, taskId, current.id, { status: 'failed', errorCode: 'APPROVAL_REJECTED', finishedAt: now });
+        await deps.store.appendEvent(tenantId, {
           taskId,
           type: 'approval_decided',
           actorType: 'human',
@@ -361,14 +361,14 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
       }
 
       // approved
-      await deps.store.appendEvent({
+      await deps.store.appendEvent(tenantId, {
         taskId,
         type: 'approval_decided',
         actorType: 'human',
         actorId: approval.decidedBy,
         payload: { approvalId, decision: 'approved' },
       });
-      await deps.store.updateStep(taskId, current.id, {
+      await deps.store.updateStep(tenantId, taskId, current.id, {
         status: 'succeeded',
         output: { approvalId, decidedBy: approval.decidedBy },
         finishedAt: now,
@@ -401,7 +401,7 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
       if (approvalStepOutput?.approvalId) {
         const approval = await deps.store.getApproval(tenantId, approvalStepOutput.approvalId);
         if (!approval || approval.status !== 'approved' || approval.taskId !== taskId || approval.toolName !== TOOL_NAME) {
-          await deps.store.updateStep(taskId, current.id, { status: 'failed', errorCode: 'APPROVAL_INVALID', finishedAt: now });
+          await deps.store.updateStep(tenantId, taskId, current.id, { status: 'failed', errorCode: 'APPROVAL_INVALID', finishedAt: now });
           return fail(deps, tenantId, taskId, 'Approval record is missing, unapproved, or does not match this task; refusing to execute.', [
             'approval_invalid_at_execution',
           ]);
@@ -409,7 +409,7 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
         expectedHash = approval.actionHash;
       }
       if (recomputedHash !== expectedHash) {
-        await deps.store.updateStep(taskId, current.id, { status: 'failed', errorCode: 'ACTION_HASH_MISMATCH', finishedAt: now });
+        await deps.store.updateStep(tenantId, taskId, current.id, { status: 'failed', errorCode: 'ACTION_HASH_MISMATCH', finishedAt: now });
         return fail(deps, tenantId, taskId, 'Approved action hash does not match the action about to execute; refusing to execute.', [
           'action_hash_mismatch_at_execution',
         ]);
@@ -451,19 +451,19 @@ export async function advance(deps: ExecutorDeps, tenantId: string, taskId: stri
       }
 
       if (mismatches.length === 0) {
-        await deps.store.updateStep(taskId, current.id, { status: 'succeeded', output: verified, startedAt: now, finishedAt: now });
-        await deps.store.appendEvent({ taskId, type: 'verification_result', actorType: 'system', payload: { ok: true, invoiceId: written.invoiceId } });
+        await deps.store.updateStep(tenantId, taskId, current.id, { status: 'succeeded', output: verified, startedAt: now, finishedAt: now });
+        await deps.store.appendEvent(tenantId, { taskId, type: 'verification_result', actorType: 'system', payload: { ok: true, invoiceId: written.invoiceId } });
         return succeed(deps, tenantId, taskId, `Draft invoice ${written.invoiceNumber ?? written.invoiceId} created and verified.`);
       }
 
-      await deps.store.updateStep(taskId, current.id, {
+      await deps.store.updateStep(tenantId, taskId, current.id, {
         status: 'failed',
         errorCode: 'VERIFICATION_MISMATCH',
         errorMessage: mismatches.join('; '),
         startedAt: now,
         finishedAt: now,
       });
-      await deps.store.appendEvent({ taskId, type: 'verification_result', actorType: 'system', payload: { ok: false, mismatches } });
+      await deps.store.appendEvent(tenantId, { taskId, type: 'verification_result', actorType: 'system', payload: { ok: false, mismatches } });
       // The write almost certainly happened (we have an invoiceId) but we
       // could not confirm it matches what was approved — this is NEVER
       // reported as `succeeded`.
@@ -496,13 +496,13 @@ async function runIdempotentWrite(
 
   if (existing?.status === 'completed') {
     if (existing.requestHash !== requestHash) {
-      await deps.store.updateStep(taskId, stepId, { status: 'failed', errorCode: 'IDEMPOTENCY_KEY_REUSED', finishedAt: now });
+      await deps.store.updateStep(tenantId, taskId, stepId, { status: 'failed', errorCode: 'IDEMPOTENCY_KEY_REUSED', finishedAt: now });
       return { status: 'blocked', task: await fail(deps, tenantId, taskId, 'Idempotency key reused with a different request.', ['idempotency_key_reused_with_different_request']) };
     }
     // Dedup: a previous attempt already completed this exact write
     // (possibly the process crashed right after, before the step record was
     // updated). Reuse the cached result; do NOT call the connector again.
-    await deps.store.updateStep(taskId, stepId, { status: 'succeeded', output: existing.resultRef, finishedAt: now });
+    await deps.store.updateStep(tenantId, taskId, stepId, { status: 'succeeded', output: existing.resultRef, finishedAt: now });
     return { status: 'advanced' };
   }
 
@@ -510,13 +510,13 @@ async function runIdempotentWrite(
     const reconciled = await tryReconcile(deps, tenantId, idempotencyKey);
     if (reconciled) {
       await deps.store.completeIdempotencyRecord(tenantId, TOOL_NAME, idempotencyKey, reconciled);
-      await deps.store.updateStep(taskId, stepId, { status: 'succeeded', output: reconciled, finishedAt: now });
+      await deps.store.updateStep(tenantId, taskId, stepId, { status: 'succeeded', output: reconciled, finishedAt: now });
       return { status: 'advanced' };
     }
     // Ambiguous: a previous attempt is (or claims to be) still in flight and
     // we have no way to confirm whether it already took effect. Never retry
     // blindly — escalate instead of risking a duplicate financial write.
-    await deps.store.updateStep(taskId, stepId, { status: 'failed', errorCode: 'AMBIGUOUS_WRITE_OUTCOME', finishedAt: now });
+    await deps.store.updateStep(tenantId, taskId, stepId, { status: 'failed', errorCode: 'AMBIGUOUS_WRITE_OUTCOME', finishedAt: now });
     return {
       status: 'blocked',
       task: await fail(deps, tenantId, taskId, 'Previous write attempt has an unknown outcome; escalating for manual review instead of retrying.', [
@@ -527,7 +527,7 @@ async function runIdempotentWrite(
 
   // existing is null, or a prior attempt definitively failed with no side
   // effect (status 'failed') — safe to (re)try, subject to maxAttempts.
-  const step = await deps.store.getStep(taskId, stepId);
+  const step = await deps.store.getStep(tenantId, taskId, stepId);
   if (!step) throw new Error(`Step ${stepId} not found`);
   if (step.attempt >= step.maxAttempts) {
     return {
@@ -536,9 +536,9 @@ async function runIdempotentWrite(
     };
   }
 
-  await deps.store.updateStep(taskId, stepId, { status: 'running', attempt: step.attempt + 1, startedAt: now });
-  await deps.store.startIdempotencyRecord({ tenantId, toolName: TOOL_NAME, idempotencyKey, requestHash });
-  await deps.store.appendEvent({ taskId, type: 'step_started', actorType: 'system', payload: { step: 'execute_write', attempt: step.attempt + 1 } });
+  await deps.store.updateStep(tenantId, taskId, stepId, { status: 'running', attempt: step.attempt + 1, startedAt: now });
+  await deps.store.startIdempotencyRecord(tenantId, { tenantId, toolName: TOOL_NAME, idempotencyKey, requestHash });
+  await deps.store.appendEvent(tenantId, { taskId, type: 'step_started', actorType: 'system', payload: { step: 'execute_write', attempt: step.attempt + 1 } });
 
   try {
     const result = await deps.connector.createDraftInvoice(
@@ -549,7 +549,7 @@ async function runIdempotentWrite(
       // Permanent, non-ambiguous rejection: the connector is telling us
       // definitively that nothing was created.
       await deps.store.failIdempotencyRecord(tenantId, TOOL_NAME, idempotencyKey);
-      await deps.store.updateStep(taskId, stepId, { status: 'failed', errorCode: result.error?.code ?? 'CONNECTOR_REJECTED', errorMessage: result.error?.message, finishedAt: now });
+      await deps.store.updateStep(tenantId, taskId, stepId, { status: 'failed', errorCode: result.error?.code ?? 'CONNECTOR_REJECTED', errorMessage: result.error?.message, finishedAt: now });
       return {
         status: 'blocked',
         task: await fail(deps, tenantId, taskId, `ERP rejected the write: ${result.error?.message ?? 'unknown error'}.`, [
@@ -558,8 +558,8 @@ async function runIdempotentWrite(
       };
     }
     await deps.store.completeIdempotencyRecord(tenantId, TOOL_NAME, idempotencyKey, result.data);
-    await deps.store.updateStep(taskId, stepId, { status: 'succeeded', output: result.data, finishedAt: now });
-    await deps.store.appendEvent({ taskId, type: 'step_succeeded', actorType: 'system', payload: { step: 'execute_write' } });
+    await deps.store.updateStep(tenantId, taskId, stepId, { status: 'succeeded', output: result.data, finishedAt: now });
+    await deps.store.appendEvent(tenantId, { taskId, type: 'step_succeeded', actorType: 'system', payload: { step: 'execute_write' } });
     return { status: 'advanced' };
   } catch {
     // The call threw: we genuinely do not know whether the ERP committed
@@ -569,17 +569,17 @@ async function runIdempotentWrite(
     const reconciled = await tryReconcile(deps, tenantId, idempotencyKey);
     if (reconciled) {
       await deps.store.completeIdempotencyRecord(tenantId, TOOL_NAME, idempotencyKey, reconciled);
-      await deps.store.updateStep(taskId, stepId, { status: 'succeeded', output: reconciled, finishedAt: now });
+      await deps.store.updateStep(tenantId, taskId, stepId, { status: 'succeeded', output: reconciled, finishedAt: now });
       return { status: 'advanced' };
     }
 
-    const refreshedStep = await deps.store.getStep(taskId, stepId);
+    const refreshedStep = await deps.store.getStep(tenantId, taskId, stepId);
     const hasRetriesLeft = !!refreshedStep && refreshedStep.attempt < refreshedStep.maxAttempts;
     if (hasRetriesLeft && !deps.connector.findByIdempotencyKey) {
       // No reconciliation capability at all: we cannot distinguish "transient,
       // nothing happened" from "crashed after success". Do not guess — leave
       // the idempotency record in_progress and escalate.
-      await deps.store.updateStep(taskId, stepId, { status: 'failed', errorCode: 'AMBIGUOUS_WRITE_OUTCOME', finishedAt: now });
+      await deps.store.updateStep(tenantId, taskId, stepId, { status: 'failed', errorCode: 'AMBIGUOUS_WRITE_OUTCOME', finishedAt: now });
       return {
         status: 'blocked',
         task: await fail(deps, tenantId, taskId, 'Write attempt failed with an unknown outcome and this connector cannot reconcile; escalating for manual review.', [
@@ -592,7 +592,7 @@ async function runIdempotentWrite(
     // (tryReconcile returned null) — safe to mark this attempt failed and
     // let the loop retry on the next advance() call, up to maxAttempts.
     await deps.store.failIdempotencyRecord(tenantId, TOOL_NAME, idempotencyKey);
-    await deps.store.updateStep(taskId, stepId, { status: 'failed', errorCode: 'TRANSIENT_ERROR', finishedAt: now });
+    await deps.store.updateStep(tenantId, taskId, stepId, { status: 'failed', errorCode: 'TRANSIENT_ERROR', finishedAt: now });
     if (!hasRetriesLeft) {
       return {
         status: 'blocked',
@@ -600,7 +600,7 @@ async function runIdempotentWrite(
       };
     }
     // Reset step to pending so the next advance() call retries it.
-    await deps.store.updateStep(taskId, stepId, { status: 'pending' });
+    await deps.store.updateStep(tenantId, taskId, stepId, { status: 'pending' });
     return { status: 'advanced' };
   }
 }

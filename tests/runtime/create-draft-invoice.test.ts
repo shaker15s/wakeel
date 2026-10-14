@@ -5,8 +5,8 @@ import { FakeERPConnector } from '@/server/erp/fake-connector';
 import { TaskStep } from '@/server/runtime/types';
 import { ACTOR, HUMAN_APPROVER, makeDeps, TENANT_A, TENANT_B, VALID_INPUT } from './helpers';
 
-async function approvalStepOf(deps: ExecutorDeps, taskId: string): Promise<TaskStep> {
-  const steps = await deps.store.listSteps(taskId);
+async function approvalStepOf(deps: ExecutorDeps, tenantId: string, taskId: string): Promise<TaskStep> {
+  const steps = await deps.store.listSteps(tenantId, taskId);
   const step = steps.find((s) => s.name === 'await_approval');
   if (!step) throw new Error('await_approval step not found');
   return step;
@@ -20,7 +20,7 @@ describe('create_draft_invoice workflow — happy path', () => {
     let t = await advance(deps, TENANT_A, task.id);
     expect(t.status).toBe('waiting_for_approval');
 
-    const step = await approvalStepOf(deps, task.id);
+    const step = await approvalStepOf(deps, task.tenantId, task.id);
     const approvalId = (step.output as { approvalId: string }).approvalId;
     const approval = await deps.store.getApproval(TENANT_A, approvalId);
     expect(approval?.status).toBe('pending');
@@ -48,7 +48,7 @@ describe('approval handling', () => {
     const deps = makeDeps();
     const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
     await advance(deps, TENANT_A, task.id);
-    const step = await approvalStepOf(deps, task.id);
+    const step = await approvalStepOf(deps, task.tenantId, task.id);
     const approvalId = (step.output as { approvalId: string }).approvalId;
 
     await deps.store.decideApproval(TENANT_A, approvalId, 'rejected', HUMAN_APPROVER, 'amount looks wrong');
@@ -63,7 +63,7 @@ describe('approval handling', () => {
     const deps = makeDeps();
     const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
     await advance(deps, TENANT_A, task.id);
-    const step = await approvalStepOf(deps, task.id);
+    const step = await approvalStepOf(deps, task.tenantId, task.id);
     const approvalId = (step.output as { approvalId: string }).approvalId;
 
     // Simulate a tampered/compromised approval record (e.g. a corrupted row,
@@ -99,7 +99,7 @@ describe('approval handling', () => {
     const deps = makeDeps();
     const task = await createCreateDraftInvoiceTask(deps, { tenantId: TENANT_A, actorId: ACTOR, input: VALID_INPUT });
     await advance(deps, TENANT_A, task.id);
-    const step = await approvalStepOf(deps, task.id);
+    const step = await approvalStepOf(deps, task.tenantId, task.id);
     const approvalId = (step.output as { approvalId: string }).approvalId;
 
     await deps.store.decideApproval(TENANT_A, approvalId, 'approved', HUMAN_APPROVER);
@@ -153,7 +153,7 @@ describe('cross-tenant isolation', () => {
     await expect(advance(deps, TENANT_B, task.id)).rejects.toThrow();
 
     await advance(deps, TENANT_A, task.id);
-    const step = await approvalStepOf(deps, task.id);
+    const step = await approvalStepOf(deps, task.tenantId, task.id);
     const approvalId = (step.output as { approvalId: string }).approvalId;
 
     expect(await deps.store.getApproval(TENANT_B, approvalId)).toBeNull();
